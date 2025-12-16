@@ -73,7 +73,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           _profile = profile;
           _firstNameCtrl.text = profile.firstname;
           _lastNameCtrl.text = profile.lastname;
-          _phoneCtrl.text = profile.phonenumber;
+          _phoneCtrl.text = profile.phone;
           _cnicCtrl.text = profile.cnic;
           _addressCtrl.text = profile.address;
           _blockCtrl.text = profile.block;

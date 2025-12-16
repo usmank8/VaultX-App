@@ -71,71 +71,78 @@ class _LoginPageState extends State<LoginPage> {
 
       // Check if profile exists
       try {
-        debugPrint('Attempting to fetch profile after login...');
+        debugPrint('🔐 Login successful, checking approval status...');
+        
+        // ✅ Get approval status from SharedPreferences (set during login)
+        final prefs = await SharedPreferences.getInstance();
+        final isApproved = prefs.getBool('isApprovedBySociety') ?? false;
+        
+        debugPrint('📋 Approval status from login: $isApproved');
+
+        // Fetch profile to check if residence details are complete
+        debugPrint('📡 Fetching user profile...');
         final profile = await _api.getProfile();
         debugPrint('Profile fetch completed: ${profile != null ? "Found" : "Not found"}');
 
-        final prefs = await SharedPreferences.getInstance();
-        final isApproved = prefs.getBool('isApprovedBySocietyAdmin') ?? false;
-
+        // Check if profile needs residence details
         bool needsResidenceDetails = false;
         if (profile != null) {
-          // Check if any residence-related fields are empty
           if (profile.address.isEmpty ||
               profile.block.isEmpty ||
               profile.residence.isEmpty ||
               profile.residenceType.isEmpty) {
             needsResidenceDetails = true;
-          }
-        }
-
-        if (profile != null && !needsResidenceDetails) {
-          // Profile exists and residence details are filled
-          if (!isApproved) {
-            if (!mounted) return;
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => const PendingApprovalScreen()),
-            );
-          } else {
-            // Profile exists and is approved
-            if (!mounted) return;
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => const DashboardPage()),
-            );
+            debugPrint('⚠️ Profile incomplete - missing residence details');
           }
         } else {
-          // No profile or missing residence details, go to profile registration
-          if (!mounted) return;
+          debugPrint('⚠️ No profile found');
+        }
+
+        if (!mounted) return;
+
+        // ✅ Decision tree:
+        if (profile == null || needsResidenceDetails) {
+          // Case 1: No profile or incomplete profile → ProfileRegistrationPage
+          debugPrint('🚀 Navigating to ProfileRegistrationPage');
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (_) => const ProfileRegistrationPage()),
           );
+        } else if (!isApproved) {
+          // Case 2: Profile complete but not approved → PendingApprovalScreen
+          debugPrint('⏳ Navigating to PendingApprovalScreen');
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const PendingApprovalScreen()),
+          );
+        } else {
+          // Case 3: Profile complete AND approved → DashboardPage
+          debugPrint('✅ Navigating to DashboardPage');
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const DashboardPage()),
+          );
         }
-      } catch (e) {
-        debugPrint('Error checking profile: $e');
-
-        // Check if it's a 500 error from backend
-        if (e.toString().contains('500')) {
-          debugPrint('Backend returned 500 error - likely database/configuration issue');
-          setState(() => _error = 'Server error. Please check backend configuration and database.');
-          return;
-        }
-
-        // For 404 or other errors, assume no profile exists and go to registration
-        if (e.toString().contains('404') || e.toString().contains('not found')) {
-          debugPrint('No profile found, redirecting to profile registration');
-          if (!mounted) return;
+      } catch (profileError) {
+        debugPrint('❌ Error fetching profile: $profileError');
+        
+        if (!mounted) return;
+        
+        // If profile fetch fails, still route based on approval status
+        final prefs = await SharedPreferences.getInstance();
+        final isApproved = prefs.getBool('isApprovedBySociety') ?? false;
+        
+        if (!isApproved) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const PendingApprovalScreen()),
+          );
+        } else {
+          // Assume profile registration needed if fetch failed
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (_) => const ProfileRegistrationPage()),
           );
-        } else {
-          // Show the actual error message
-          debugPrint('Unexpected error during profile fetch, showing error to user');
-          setState(() => _error = e.toString().replaceAll('Exception: ', ''));
-          return;
         }
       }
     } catch (e) {

@@ -68,7 +68,7 @@ class _ProfileRegistrationPageState extends State<ProfileRegistrationPage> {
         final onlyEmailPresent = profile.email.isNotEmpty &&
             profile.firstname.isEmpty &&
             profile.lastname.isEmpty &&
-            profile.phonenumber.isEmpty &&
+            profile.phone.isEmpty &&
             profile.cnic.isEmpty &&
             profile.address.isEmpty &&
             profile.block.isEmpty &&
@@ -82,7 +82,7 @@ class _ProfileRegistrationPageState extends State<ProfileRegistrationPage> {
         // Prefill fields with existing data
         _firstNameCtrl.text = profile.firstname;
         _lastNameCtrl.text = profile.lastname;
-        _phoneCtrl.text = profile.phonenumber;
+        _phoneCtrl.text = profile.phone;
         _cnicCtrl.text = profile.cnic;
         _blockCtrl.text = profile.block;
         _addressCtrl.text = profile.address;
@@ -92,7 +92,7 @@ class _ProfileRegistrationPageState extends State<ProfileRegistrationPage> {
         // Check if all required fields are filled
         final allFieldsFilled = profile.firstname.isNotEmpty &&
             profile.lastname.isNotEmpty &&
-            profile.phonenumber.isNotEmpty &&
+            profile.phone.isNotEmpty &&
             profile.cnic.isNotEmpty &&
             profile.address.isNotEmpty &&
             profile.block.isNotEmpty &&
@@ -229,7 +229,7 @@ class _ProfileRegistrationPageState extends State<ProfileRegistrationPage> {
     final dto = CreateProfileModel(
       firstname: _firstNameCtrl.text.trim(),
       lastname: _lastNameCtrl.text.trim(),
-      phonenumber: _phoneCtrl.text.trim(),
+      phone: _phoneCtrl.text.trim(),
       email: _existingProfile?.email ?? '',
       cnic: _cnicCtrl.text.trim(),
       address: _addressCtrl.text.trim(),
@@ -244,7 +244,7 @@ class _ProfileRegistrationPageState extends State<ProfileRegistrationPage> {
         final updateDto = UpdateProfileModel(
           firstname: dto.firstname,
           lastname: dto.lastname,
-          phonenumber: dto.phonenumber,
+          phonenumber: dto.phone,
           cnic: dto.cnic,
           address: dto.address,
           block: dto.block,
@@ -262,7 +262,7 @@ class _ProfileRegistrationPageState extends State<ProfileRegistrationPage> {
       // Check if all required fields are filled before navigating
       final allFieldsFilled = dto.firstname.isNotEmpty &&
           dto.lastname.isNotEmpty &&
-          dto.phonenumber.isNotEmpty &&
+          dto.phone.isNotEmpty &&
           dto.cnic.isNotEmpty &&
           dto.address.isNotEmpty &&
           dto.block.isNotEmpty &&

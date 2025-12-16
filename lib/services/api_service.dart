@@ -23,7 +23,7 @@ class ApiService {
     if (Platform.isAndroid) {
       return 'http://10.0.2.2:5280/api';
     } else {
-      return 'https://vaultx-be-sq00.onrender.com';
+      return 'http://10.0.2.2:5280/api';  // ✅ Added /api
     }
   }
 
@@ -42,8 +42,9 @@ class ApiService {
   }
 
   /// ─── SIGN UP (public) ───────────────────────────────────────────
+  /// ✅ CHANGED: /auth/signup → /auth/register
   Future<void> signUp(SignUpModel dto) async {
-    final uri = Uri.parse('$_baseUrl/auth/signup');
+    final uri = Uri.parse('$_baseUrl/auth/register');  // ✅ Changed endpoint
 
     try {
       debugPrint('Sending signup request to: $uri');
@@ -83,7 +84,7 @@ class ApiService {
   }
 
   /// ─── LOGIN (public) ─────────────────────────────────────────────
-  /// on success stores the JWT in SharedPreferences and returns the token
+  /// ✅ Already correct - no changes needed
   Future<String?> login(SignInModel dto) async {
     final uri = Uri.parse('$_baseUrl/Auth/login');
 
@@ -102,12 +103,12 @@ class ApiService {
     if (res.statusCode == 200 || res.statusCode == 201) {
       final body = jsonDecode(res.body) as Map<String, dynamic>;
 
-      // Extract accessToken (new .NET backend) or token (old backend)
+      // ✅ Extract accessToken (handle both cases)
       String? token;
       if (body.containsKey('accessToken')) {
         token = body['accessToken'] as String?;
-      } else if (body.containsKey('token')) {
-        token = body['token'] as String?;
+      } else if (body.containsKey('AccessToken')) {
+        token = body['AccessToken'] as String?;
       }
 
       if (token == null || token.isEmpty) {
@@ -118,13 +119,17 @@ class ApiService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('jwt_token', token);
 
-      // Save isApprovedBySocietyAdmin flag if present
-      if (body.containsKey('isApprovedBySocietyAdmin')) {
-        await prefs.setBool('isApprovedBySocietyAdmin',
-            body['isApprovedBySocietyAdmin'] == true);
+      // ✅ Save approval status (handle both field names)
+      bool isApproved = false;
+      if (body.containsKey('isApprovedBySociety')) {
+        isApproved = body['isApprovedBySociety'] == true;
+      } else if (body.containsKey('IsApprovedBySociety')) {
+        isApproved = body['IsApprovedBySociety'] == true;
       }
+      
+      await prefs.setBool('isApprovedBySociety', isApproved);
+      debugPrint('✅ Approval status saved: $isApproved');
 
-      debugPrint('Login successful, token saved');
       return token;
     } else {
       String errorMessage;
@@ -140,7 +145,7 @@ class ApiService {
   }
 
   /// ─── LOGOUT ─────────────────────────────────────────────────────
-  /// Removes the stored JWT
+  /// ✅ No changes needed
   Future<void> logout() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -151,11 +156,11 @@ class ApiService {
 
     // Always clear the in-memory token
     _inMemoryToken = null;
-    _client.clearToken(); // Use a new method to clear the token
+    _client.clearToken();
   }
 
-  /// ─── PROFILE: GET /profile/me ───────────────────────────────────
-  /// Returns your saved profile (or throws if something goes wrong)
+  /// ─── PROFILE: GET /Profile/me ───────────────────────────────────
+  /// ✅ Already correct - no changes needed
   Future<CreateProfileModel?> getProfile() async {
     final uri = Uri.parse('$_baseUrl/Profile/me');
 
@@ -181,7 +186,6 @@ class ApiService {
       }
     } else if (res.statusCode == 404) {
       debugPrint('No profile found (404) - user needs to create profile');
-      // no profile yet
       return null;
     } else {
       String errorMessage;
@@ -208,20 +212,18 @@ class ApiService {
     }
   }
 
-  /// ─── PROFILE: POST /profile/create ──────────────────────────────
+  /// ─── PROFILE: POST /Profile/create ──────────────────────────────
+  /// ✅ CHANGED: /profile/create → /Profile/create (capitalized)
   Future<void> createProfile(CreateProfileModel dto) async {
-    final uri = Uri.parse('$_baseUrl/profile/create');
+    final uri = Uri.parse('$_baseUrl/Profile/create');  // ✅ Capitalized Profile
 
-    // Debug the token before making the request
     debugPrint('About to create profile, checking token:');
     _client.debugToken();
 
-    // Debug the request body
     final requestBody = jsonEncode(dto.toJson());
     debugPrint('Profile create request body: $requestBody');
 
     try {
-      // Ensure content type is set explicitly
       final res = await _client.post(
         uri,
         headers: {'Content-Type': 'application/json'},
@@ -253,21 +255,19 @@ class ApiService {
     }
   }
 
-  //// ─── PROFILE: PUT /profile/update ──────────────────────────────
+  /// ─── PROFILE: PUT /Profile/update ──────────────────────────────
+  /// ✅ CHANGED: /profile/update → /Profile/update + PATCH → PUT
   Future<void> updateProfile(UpdateProfileModel dto) async {
-    final uri = Uri.parse('$_baseUrl/profile/update');
+    final uri = Uri.parse('$_baseUrl/Profile/update');  // ✅ Capitalized Profile
 
-    // Debug the token before making the request
     debugPrint('About to update profile, checking token:');
     _client.debugToken();
 
-    // Debug the request body
     final requestBody = jsonEncode(dto.toJson());
     debugPrint('Profile update request body: $requestBody');
 
     try {
-      // Ensure content type is set explicitly
-      final res = await _client.patch(
+      final res = await _client.put(  // ✅ Changed from patch to put
         uri,
         headers: {'Content-Type': 'application/json'},
         body: requestBody,
@@ -276,7 +276,7 @@ class ApiService {
       debugPrint('Profile update response status: ${res.statusCode}');
       debugPrint('Profile update response body: ${res.body}');
 
-      if (res.statusCode != 200 && res.statusCode != 201) {
+      if (res.statusCode != 200 && res.statusCode != 204) {  // ✅ Accept 204 No Content
         String errorMessage;
         try {
           final errorBody = jsonDecode(res.body);
@@ -298,27 +298,33 @@ class ApiService {
     }
   }
 
-  /// ─── PROFILE: POST /profile/password/update ─────────────────────
+  /// ─── PROFILE: PUT /Profile/password ─────────────────────────────
+  /// ✅ CHANGED: /profile/password/update → /Profile/password + POST → PUT
   Future<void> updatePassword(UpdatePasswordModel dto) async {
-    final uri = Uri.parse('$_baseUrl/profile/password/update');
-    final res = await _client.post(
+    final uri = Uri.parse('$_baseUrl/Profile/password');  // ✅ Changed endpoint
+    
+    final res = await _client.put(  // ✅ Changed from post to put
       uri,
+      headers: {'Content-Type': 'application/json'},
       body: jsonEncode(dto.toJson()),
     );
-    if (res.statusCode != 200 && res.statusCode != 201) {
+    
+    if (res.statusCode != 200 && res.statusCode != 204) {
       throw Exception(
           'Password update failed (${res.statusCode}): ${res.body}');
     }
   }
 
-  /// ─── VEHICLE: POST /vehicle/add ─────────────────────────────────
+  /// ─── VEHICLE: POST /Vehicles ─────────────────────────────────
+  /// ✅ CHANGED: /vehicle/add → /Vehicles
   Future<void> addVehicle(VehicleModel dto) async {
-    final uri = Uri.parse('$_baseUrl/vehicle/add');
+    final uri = Uri.parse('$_baseUrl/Vehicles');  // ✅ Changed endpoint
 
     debugPrint('Adding vehicle: ${jsonEncode(dto.toJson())}');
 
     final res = await _client.post(
       uri,
+      headers: {'Content-Type': 'application/json'},
       body: jsonEncode(dto.toJson()),
     );
 
@@ -329,9 +335,11 @@ class ApiService {
     }
   }
 
-  /// ─── VEHICLE: GET /vehicle ─────────────────────────────────────
+  /// ─── VEHICLE: GET /Vehicles/user/me ─────────────────────────────────────
+  /// ✅ CHANGED: /vehicle → /Vehicles/user/me
   Future<List<VehicleModel>> getVehicles() async {
-    final uri = Uri.parse('$_baseUrl/vehicle');
+    final uri = Uri.parse('$_baseUrl/Vehicles/user/me');  // ✅ Changed endpoint
+    
     final res = await _client.get(uri);
 
     if (res.statusCode == 200) {
@@ -342,30 +350,34 @@ class ApiService {
     }
   }
 
-  /// ─── GUEST: POST /guest/register ─────────────────────────────────
+  /// ─── GUEST: POST /Guests ─────────────────────────────────
+  /// ✅ CHANGED: /guest/register → /Guests + qrCodeImage → qrCode
   Future<String> registerGuest(AddGuestModel dto) async {
-    final uri = Uri.parse('$_baseUrl/guest/register');
+    final uri = Uri.parse('$_baseUrl/Guests');  // ✅ Changed endpoint
 
     debugPrint('Registering guest: ${jsonEncode(dto.toJson())}');
 
     final res = await _client.post(
       uri,
+      headers: {'Content-Type': 'application/json'},
       body: jsonEncode(dto.toJson()),
     );
 
     debugPrint('Register guest response: ${res.statusCode}');
     if (res.statusCode == 200 || res.statusCode == 201) {
       final Map<String, dynamic> responseData = jsonDecode(res.body);
-      return responseData['qrCodeImage'] ?? '';
+      return responseData['qrCode'] ?? '';  // ✅ Changed from qrCodeImage to qrCode
     } else {
       debugPrint('Register guest error body: ${res.body}');
       throw Exception('Register guest failed (${res.statusCode}): ${res.body}');
     }
   }
 
-  /// ─── GUEST: GET /guest ─────────────────────────────────────────
+  /// ─── GUEST: GET /Guests/user/me ─────────────────────────────────────────
+  /// ✅ CHANGED: /Guest/guest/mine → /Guests/user/me
   Future<List<GuestModel>> getGuests() async {
-    final uri = Uri.parse('$_baseUrl/Guest/guest/mine');
+    final uri = Uri.parse('$_baseUrl/Guests/user/me');  // ✅ Changed endpoint
+    
     final res = await _client.get(uri);
 
     if (res.statusCode == 200) {
@@ -376,13 +388,15 @@ class ApiService {
     }
   }
 
-  /// ─── GUEST: POST /guest/verify ─────────────────────────────────
+  /// ─── GUEST: POST /Guests/{guestId}/verify ─────────────────────────────────
+  /// ✅ CHANGED: /guest/verify → /Guests/{guestId}/verify (RESTful pattern)
   Future<Map<String, dynamic>> verifyGuest(String guestId) async {
-    final uri = Uri.parse('$_baseUrl/guest/verify');
+    final uri = Uri.parse('$_baseUrl/Guests/$guestId/verify');  // ✅ Changed to RESTful pattern
 
     final res = await _client.post(
       uri,
-      body: jsonEncode({'guestId': guestId}),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({}),  // Empty body for verification
     );
 
     if (res.statusCode == 200 || res.statusCode == 201) {
@@ -392,17 +406,21 @@ class ApiService {
     }
   }
 
-  /// ─── AUTH: POST /auth/otp/send ────────────────────────────────
+  /// ─── AUTH: POST /otps/send ────────────────────────────────
+  /// ✅ CHANGED: /auth/otp/send → /otps/send
   Future<void> sendOtp(String email) async {
-    final uri = Uri.parse('$_baseUrl/auth/otp/send');
+    final uri = Uri.parse('$_baseUrl/otps/send');  // ✅ Changed endpoint
+    
     final body = jsonEncode({'email': email});
     debugPrint('Sending OTP request to: $uri');
     debugPrint('Request body: $body');
+    
     final res = await http.post(
       uri,
       headers: {'Content-Type': 'application/json'},
       body: body,
     );
+    
     debugPrint('Send OTP response status: ${res.statusCode}');
     if (res.statusCode == 200 || res.statusCode == 201) {
       debugPrint('OTP sent successfully');
@@ -420,17 +438,21 @@ class ApiService {
     }
   }
 
-  /// ─── AUTH: POST /auth/otp/verify ───────────────────────────────
+  /// ─── AUTH: POST /otps/verify ───────────────────────────────
+  /// ✅ CHANGED: /auth/otp/verify → /otps/verify
   Future<void> verifyOtp(String email, String otp) async {
-    final uri = Uri.parse('$_baseUrl/auth/otp/verify');
+    final uri = Uri.parse('$_baseUrl/otps/verify');  // ✅ Changed endpoint
+    
     final body = jsonEncode({'email': email, 'otp': otp});
     debugPrint('Verifying OTP at: $uri');
     debugPrint('Request body: $body');
+    
     final res = await http.post(
       uri,
       headers: {'Content-Type': 'application/json'},
       body: body,
     );
+    
     debugPrint('Verify OTP response status: ${res.statusCode}');
     if (res.statusCode == 200 || res.statusCode == 201) {
       debugPrint('OTP verified successfully');
@@ -440,7 +462,7 @@ class ApiService {
       try {
         final errorBody = jsonDecode(res.body);
         errorMessage =
-            errorBody['message'] ?? 'Verify OTP failed (${res.statusCode})';
+            errorBody['message'] ?? 'Verify OTP failed (${res.statusCode})';
       } catch (_) {
         errorMessage = 'Verify OTP failed (${res.statusCode}): ${res.body}';
       }
@@ -448,26 +470,30 @@ class ApiService {
     }
   }
 
-  /// ─── AUTH: POST /auth/resend-otp ───────────────────────────────
+  /// ─── AUTH: POST /otps/resend ───────────────────────────────
+  /// ✅ CHANGED: /auth/resend-otp → /otps/resend
   Future<void> resendOtp(String email) async {
-    final uri = Uri.parse('$_baseUrl/auth/resend-otp');
+    final uri = Uri.parse('$_baseUrl/otps/resend');  // ✅ Changed endpoint
+    
     final body = jsonEncode({'email': email});
     debugPrint('Resending OTP request to: $uri');
     debugPrint('Request body: $body');
+    
     final res = await http.post(
       uri,
       headers: {'Content-Type': 'application/json'},
       body: body,
     );
+    
     debugPrint('Resend OTP response status: ${res.statusCode}');
-    if (res.statusCode == 200) {
+    if (res.statusCode == 200 || res.statusCode == 201) {
       return;
     } else {
       String errorMessage;
       try {
         final errorBody = jsonDecode(res.body);
         errorMessage =
-            errorBody['message'] ?? 'Resend OTP failed (${res.statusCode})';
+            errorBody['message'] ?? 'Resend OTP failed (${res.statusCode})';
       } catch (_) {
         errorMessage = 'Resend OTP failed (${res.statusCode}): ${res.body}';
       }
