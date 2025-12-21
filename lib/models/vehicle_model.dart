@@ -1,42 +1,65 @@
 class VehicleModel {
-  final String vehicleName;
-  final String vehicleModel;
-  final String vehicleLicensePlateNumber;
-  final String vehicleType;
-  final String RFIDTagID;
-  final String vehicleColor;
-  final bool isGuest;
+  final String? vehicleId;
+  final String? vehicleName;
+  final String? vehicleModel;
+  final String? vehicleType;
+  final String? vehicleLicensePlateNumber;
+  final String? vehicleRfidTagId;
+  final String? vehicleColor;
+  final String? residenceId;
+  final String? residenceName;
+  final String? residenceBlock;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
 
   VehicleModel({
-    required this.vehicleName,
-    required this.vehicleModel,
-    required this.vehicleLicensePlateNumber,
-    required this.vehicleType,
-    required this.RFIDTagID,
-    required this.vehicleColor,
-    this.isGuest = false,
+    this.vehicleId,
+    this.vehicleName,
+    this.vehicleModel,
+    this.vehicleType,
+    this.vehicleLicensePlateNumber,
+    this.vehicleRfidTagId,
+    this.vehicleColor,
+    this.residenceId,
+    this.residenceName,
+    this.residenceBlock,
+    this.createdAt,
+    this.updatedAt,
   });
 
   factory VehicleModel.fromJson(Map<String, dynamic> json) {
     return VehicleModel(
-      vehicleName: json['vehicleName'] ?? '',
-      vehicleModel: json['vehicleModel'] ?? '',
-      vehicleLicensePlateNumber: json['vehicleLicensePlateNumber'] ?? '',
-      vehicleType: json['vehicleType'] ?? '',
-      RFIDTagID: json['vehicleRFIDTagId'] ?? '',
-      vehicleColor: json['vehicleColor'] ?? '',
-      isGuest: json['isGuest'] ?? false,
+      vehicleId: json['vehicleId'] as String?,
+      vehicleName: json['vehicleName'] as String?,
+      vehicleModel: json['vehicleModel'] as String?,
+      vehicleType: json['vehicleType'] as String?,
+      vehicleLicensePlateNumber: json['vehicleLicensePlateNumber'] as String?,
+      vehicleRfidTagId: json['vehicleRfidtagId'] as String? ??
+                        json['vehicleRfidTagId'] as String? ??
+                        json['vehicleRFIDTagId'] as String?,
+      vehicleColor: json['vehicleColor'] as String?,
+      residenceId: json['residenceId']?.toString(),
+      residenceName: json['residenceName'] as String?,
+      residenceBlock: json['residenceBlock'] as String?,
+      createdAt: json['createdAt'] != null
+          ? DateTime.parse(json['createdAt'] as String)
+          : null,
+      updatedAt: json['updatedAt'] != null
+          ? DateTime.parse(json['updatedAt'] as String)
+          : null,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
+      if (vehicleId != null) 'vehicleId': vehicleId,
       'vehicleName': vehicleName,
-      'vehicleModel': vehicleModel,
-      'vehicleLicensePlateNumber': vehicleLicensePlateNumber,
+      if (vehicleModel != null) 'vehicleModel': vehicleModel,
       'vehicleType': vehicleType,
-      'RFIDTagID': RFIDTagID,
-      'vehicleColor': vehicleColor,
+      'vehicleLicensePlateNumber': vehicleLicensePlateNumber,
+      if (vehicleRfidTagId != null) 'vehicleRfidTagId': vehicleRfidTagId,
+      if (vehicleColor != null) 'vehicleColor': vehicleColor,
+      if (residenceId != null) 'residenceId': residenceId,
     };
   }
 }

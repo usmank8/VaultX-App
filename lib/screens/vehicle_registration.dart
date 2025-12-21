@@ -50,7 +50,7 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
         vehicleModel: _vehicleModelController.text.trim(),
         vehicleLicensePlateNumber: _licensePlateController.text.trim(),
         vehicleType: _vehicleType,
-        RFIDTagID: _rfidTagController.text.trim(),
+        vehicleRfidTagId: _rfidTagController.text.trim(),
         vehicleColor: _vehicleColorController.text.trim(),
       );
 

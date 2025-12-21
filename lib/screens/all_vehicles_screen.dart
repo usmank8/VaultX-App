@@ -30,13 +30,13 @@ class _AllVehiclesScreenState extends State<AllVehiclesScreen> {
     setState(() {
       _filteredVehicles = widget.vehicles.where((vehicle) {
         // Apply search filter
-        final nameMatches = vehicle.vehicleName.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-                           vehicle.vehicleLicensePlateNumber.toLowerCase().contains(_searchQuery.toLowerCase());
+        final nameMatches = (vehicle.vehicleName?.toLowerCase() ?? '').contains(_searchQuery.toLowerCase()) ||
+                           (vehicle.vehicleLicensePlateNumber?.toLowerCase() ?? '').contains(_searchQuery.toLowerCase());
         
         // Apply type filter
         bool typeMatches = true;
         if (_filterOption != 'All') {
-          typeMatches = vehicle.vehicleType.toLowerCase() == _filterOption.toLowerCase();
+          typeMatches = (vehicle.vehicleType?.toLowerCase() ?? '') == _filterOption.toLowerCase();
         }
         
         return nameMatches && typeMatches;
@@ -46,7 +46,11 @@ class _AllVehiclesScreenState extends State<AllVehiclesScreen> {
 
   // Get unique vehicle types from the list
   List<String> get _vehicleTypes {
-    final types = widget.vehicles.map((v) => v.vehicleType).toSet().toList();
+    final types = widget.vehicles
+        .map((v) => v.vehicleType ?? 'Unknown')
+        .where((type) => type.isNotEmpty)
+        .toSet()
+        .toList();
     types.sort(); // Sort alphabetically
     return ['All', ...types];
   }
@@ -243,7 +247,7 @@ class _AllVehiclesScreenState extends State<AllVehiclesScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        vehicle.vehicleName,
+                        vehicle.vehicleName ?? 'Unknown Vehicle',
                         style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -251,7 +255,7 @@ class _AllVehiclesScreenState extends State<AllVehiclesScreen> {
                       ),
                       SizedBox(height: 4),
                       Text(
-                        vehicle.vehicleModel,
+                        vehicle.vehicleModel ?? 'No model',
                         style: TextStyle(
                           color: Colors.grey.shade600,
                         ),
@@ -267,7 +271,7 @@ class _AllVehiclesScreenState extends State<AllVehiclesScreen> {
                     border: Border.all(color: Color(0xFFE57373).withOpacity(0.3)),
                   ),
                   child: Text(
-                    vehicle.vehicleType,
+                    vehicle.vehicleType ?? 'Unknown',
                     style: TextStyle(
                       color: Color(0xFF600f0f),
                       fontWeight: FontWeight.bold,
@@ -288,16 +292,16 @@ class _AllVehiclesScreenState extends State<AllVehiclesScreen> {
                   child: _buildDetailItem(
                     icon: Icons.credit_card,
                     label: 'License Plate',
-                    value: vehicle.vehicleLicensePlateNumber,
+                    value: vehicle.vehicleLicensePlateNumber ?? 'N/A',
                   ),
                 ),
                 Expanded(
                   child: _buildDetailItem(
                     icon: Icons.palette,
                     label: 'Color',
-                    value: vehicle.vehicleColor,
+                    value: vehicle.vehicleColor ?? 'Unknown',
                     showColorDot: true,
-                    color: _getColorFromName(vehicle.vehicleColor),
+                    color: _getColorFromName(vehicle.vehicleColor ?? 'unknown'),
                   ),
                 ),
               ],
@@ -309,14 +313,14 @@ class _AllVehiclesScreenState extends State<AllVehiclesScreen> {
                   child: _buildDetailItem(
                     icon: Icons.nfc,
                     label: 'RFID Tag',
-                    value: vehicle.RFIDTagID.isEmpty ? 'Not assigned' : vehicle.RFIDTagID,
+                    value: (vehicle.vehicleRfidTagId?.isEmpty ?? true) ? 'Not assigned' : vehicle.vehicleRfidTagId!,
                   ),
                 ),
                 Expanded(
                   child: _buildDetailItem(
-                    icon: Icons.person,
-                    label: 'Status',
-                    value: vehicle.isGuest ? 'Guest Vehicle' : 'Resident Vehicle',
+                    icon: Icons.home,
+                    label: 'Residence',
+                    value: vehicle.residenceName ?? 'Unknown',
                   ),
                 ),
               ],
@@ -327,11 +331,11 @@ class _AllVehiclesScreenState extends State<AllVehiclesScreen> {
     );
   }
 
-  Widget _buildVehicleIcon(String vehicleType) {
+  Widget _buildVehicleIcon(String? vehicleType) {
     IconData iconData;
     Color backgroundColor;
     
-    switch (vehicleType.toLowerCase()) {
+    switch (vehicleType?.toLowerCase() ?? '') {
       case 'sedan':
       case 'car':
         iconData = Icons.directions_car;
@@ -428,9 +432,9 @@ class _AllVehiclesScreenState extends State<AllVehiclesScreen> {
     );
   }
   
-  Color _getColorFromName(String colorName) {
+  Color _getColorFromName(String? colorName) {
     // Simple mapping of color names to Color objects
-    switch (colorName.toLowerCase()) {
+    switch (colorName?.toLowerCase() ?? '') {
       case 'red':
         return Colors.red;
       case 'blue':

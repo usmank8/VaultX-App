@@ -7,11 +7,11 @@ import 'package:vaultx_solution/screens/vehicle_registration.dart';
 import 'package:vaultx_solution/screens/otp_screen.dart';
 import 'package:vaultx_solution/screens/all_guests_screen.dart';
 import 'package:vaultx_solution/screens/all_vehicles_screen.dart';
-import 'package:vaultx_solution/widgets/custom_app_bar.dart';
-import 'package:vaultx_solution/services/api_service.dart';
-import 'package:vaultx_solution/models/create_profile_model.dart';
 import 'package:vaultx_solution/models/vehicle_model.dart';
 import 'package:vaultx_solution/models/guest_model.dart';
+import 'package:vaultx_solution/services/api_service.dart';
+import 'package:vaultx_solution/widgets/residence_selector_widget.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -22,526 +22,697 @@ class DashboardPage extends StatefulWidget {
 
 class _DashboardPageState extends State<DashboardPage> {
   final ApiService _apiService = ApiService();
+
   bool _isLoading = true;
-  String _userName = "User";
-  CreateProfileModel? _userProfile;
+  String? _errorMessage;
   List<VehicleModel> _vehicles = [];
   List<GuestModel> _guests = [];
-  String? _error;
+  String? _selectedResidenceId;
 
   @override
   void initState() {
     super.initState();
-    _loadData();
+    _initializeAndLoadData();
+  }
+
+  Future<void> _initializeAndLoadData() async {
+    // Get selected residence ID
+    final prefs = await SharedPreferences.getInstance();
+    _selectedResidenceId = prefs.getString('selected_residence_id');
+    await _loadData();
   }
 
   Future<void> _loadData() async {
     setState(() {
       _isLoading = true;
-      _error = null;
+      _errorMessage = null;
     });
 
     try {
-      // Verify token is set
-      _apiService.debugToken();
+      // Load vehicles and guests
+      final vehicles = await _apiService.getVehicles();
+      final guests = await _apiService.getGuests();
 
-      // Get user profile
-      final profile = await _apiService.getProfile();
-
-      if (profile != null) {
+      if (mounted) {
         setState(() {
-          _userProfile = profile;
-          _userName = "${profile.firstname} ${profile.lastname}";
+          _vehicles = vehicles;
+          _guests = guests;
+          _isLoading = false;
         });
       }
-
-      // Get vehicles
-      final vehicles = await _apiService.getVehicles();
-      setState(() {
-        _vehicles = vehicles;
-      });
-
-      // Get guests
-      final guests = await _apiService.getGuests();
-      setState(() {
-        _guests = guests;
-      });
     } catch (e) {
-      setState(() {
-        _error = "Failed to load data: ${e.toString()}";
-      });
-
-      // If there's an authentication error, redirect to login
-      if (e.toString().contains("401") ||
-          e.toString().contains("Unauthorized")) {
-        _showSessionExpiredDialog();
+      debugPrint('Error loading data: $e');
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.toString().replaceFirst('Exception: ', '');
+          _isLoading = false;
+        });
       }
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
     }
   }
 
-  void _showSessionExpiredDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: Text("Session Expired"),
-        content: Text("Your session has expired. Please login again."),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              _logout();
-            },
-            child: Text("OK"),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _logout() async {
-    try {
-      await _apiService.logout();
-    } catch (e) {
-      // Ignore errors during logout
-    } finally {
-      // Navigate to login screen
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const LoginPage()),
-        (route) => false,
-      );
-    }
+  void _onResidenceChanged(dynamic residence) {
+    debugPrint('Residence changed: ${residence.id}');
+    _loadData();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: PreferredSize(
-        preferredSize: Size.fromHeight(70),
-        child: CustomAppBar(
-          showBackButton: false,
-          userProfile: _userProfile,
-          onRefresh: _isLoading ? null : _loadData,
-        ),
-      ),
-      backgroundColor: Colors.white,
-      body: _isLoading
-          ? Center(child: UnderReviewScreen())
-          : _error != null
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        _error!,
-                        style: TextStyle(color: Colors.red),
-                        textAlign: TextAlign.center,
-                      ),
-                      SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: _loadData,
-                        child: Text("Retry"),
-                      ),
-                    ],
+      backgroundColor: const Color(0xFFF5F5F5),
+      body: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: _loadData,
+          child: CustomScrollView(
+            slivers: [
+              // App Bar
+              SliverAppBar(
+                floating: true,
+                backgroundColor: const Color(0xFF2D0A0A),
+                title: const Text(
+                  'VaultX',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
                   ),
-                )
-              : RefreshIndicator(
-                  onRefresh: _loadData,
-                  color: Color(0xFFD6A19F),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Welcome message with user name
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 16.0),
-                          child: Text(
-                            "Welcome, $_userName",
+                ),
+                actions: [
+                  IconButton(
+                    icon: const Icon(Icons.notifications_outlined, color: Colors.white),
+                    onPressed: () {
+                      // Navigate to notifications
+                    },
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.logout, color: Colors.white),
+                    onPressed: () async {
+                      final prefs = await SharedPreferences.getInstance();
+                      await prefs.clear();
+                      if (mounted) {
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(builder: (_) => const LoginPage()),
+                        );
+                      }
+                    },
+                  ),
+                ],
+              ),
+
+              // Content
+              SliverToBoxAdapter(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Residence Selector
+                    ResidenceSelectorWidget(
+                      onResidenceChanged: _onResidenceChanged,
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // Quick Actions
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Quick Actions',
                             style: TextStyle(
-                              fontSize: 20,
+                              fontSize: 18,
                               fontWeight: FontWeight.bold,
-                              color: Color(0xFF600f0f),
                             ),
                           ),
-                        ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _QuickActionCard(
+                                  icon: Icons.person_add,
+                                  label: 'Add Guest',
+                                  color: Colors.blue,
+                                  onTap: () async {
+                                    final result = await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => const GuestRegistrationForm(),
+                                      ),
+                                    );
+                                    if (result == true) {
+                                      _loadData();
+                                    }
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: _QuickActionCard(
+                                  icon: Icons.directions_car,
+                                  label: 'Add Vehicle',
+                                  color: Colors.green,
+                                  onTap: () async {
+                                    // Check vehicle count first
+                                    if (_vehicles.length >= 4) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Maximum 4 vehicles allowed per residence'),
+                                          backgroundColor: Colors.red,
+                                        ),
+                                      );
+                                      return;
+                                    }
+                                    final result = await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => const VehicleRegistrationPage(),
+                                      ),
+                                    );
+                                    if (result == true) {
+                                      _loadData();
+                                    }
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
 
-                        // Add Buttons
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                          children: [
-                            _buildActionButton(
-                                "Generate OTP", Icons.add, context),
-                            _buildActionButton(
-                                "Add a Guest", Icons.person_add_alt, context),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-                        const Text("Overview",
-                            style: TextStyle(
-                                fontSize: 18, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 12),
+                    const SizedBox(height: 24),
 
-                        // Guests Section
+                    // Vehicles Section
+                    _buildSectionHeader(
+                      title: 'My Vehicles',
+                      count: _vehicles.length,
+                      maxCount: 4,
+                      onViewAll: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => AllVehiclesScreen(vehicles: _vehicles),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    _buildVehiclesSection(),
+
+                    const SizedBox(height: 24),
+
+                    // Guests Section
+                    _buildSectionHeader(
+                      title: 'Recent Guests',
+                      count: _guests.length,
+                      onViewAll: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => AllGuestsScreen(guests: _guests),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    _buildGuestsSection(),
+
+                    const SizedBox(height: 24),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader({
+    required String title,
+    required int count,
+    int? maxCount,
+    required VoidCallback onViewAll,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2D0A0A),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  maxCount != null ? '$count/$maxCount' : '$count',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          TextButton(
+            onPressed: onViewAll,
+            child: const Text('View All'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVehiclesSection() {
+    if (_isLoading) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(32),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (_errorMessage != null) {
+      return Padding(
+        padding: const EdgeInsets.all(16),
+        child: Card(
+          color: Colors.red.shade50,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.red, size: 48),
+                const SizedBox(height: 8),
+                Text(
+                  _errorMessage!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.red),
+                ),
+                const SizedBox(height: 8),
+                ElevatedButton(
+                  onPressed: _loadData,
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (_vehicles.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Card(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              children: [
+                Icon(
+                  Icons.directions_car_outlined,
+                  size: 48,
+                  color: Colors.grey.shade400,
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'No vehicles registered',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Add up to 4 vehicles per residence',
+                  style: TextStyle(
+                    color: Colors.grey.shade600,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    final result = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const VehicleRegistrationPage(),
+                      ),
+                    );
+                    if (result == true) {
+                      _loadData();
+                    }
+                  },
+                  icon: const Icon(Icons.add),
+                  label: const Text('Add Vehicle'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2D0A0A),
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Show vehicles in horizontal scroll
+    return SizedBox(
+      height: 140,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: _vehicles.length,
+        itemBuilder: (context, index) {
+          final vehicle = _vehicles[index];
+          return Container(
+            width: 200,
+            margin: EdgeInsets.only(right: index < _vehicles.length - 1 ? 12 : 0),
+            child: Card(
+              elevation: 2,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF2D0A0A).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(
+                            _getVehicleIcon(vehicle.vehicleType),
+                            color: const Color(0xFF2D0A0A),
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
                         Expanded(
-                          child: SingleChildScrollView(
-                            child: Column(
-                              children: [
-                                _buildCard(
-                                  context: context,
-                                  title: "Guests",
-                                  trailingText: "Add",
-                                  viewAllText: "View All",
-                                  onViewAllTap: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) =>
-                                            AllGuestsScreen(guests: _guests),
-                                      ),
-                                    ).then((_) => _loadData());
-                                  },
-                                  onTrailingTap: () async {
-                                    // Navigate to guest registration
-                                    final result = await Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) =>
-                                            const GuestRegistrationForm(),
-                                      ),
-                                    );
-
-                                    // Refresh data if guest was added
-                                    if (result == true) {
-                                      _loadData();
-                                    }
-                                  },
-                                  content: _guests.isEmpty
-                                      ? Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                              vertical: 16.0),
-                                          child: Center(
-                                            child: Text(
-                                              "No guests added yet",
-                                              style: TextStyle(
-                                                color: Colors.grey.shade600,
-                                                fontStyle: FontStyle.italic,
-                                              ),
-                                            ),
-                                          ),
-                                        )
-                                      : Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: _guests
-                                              .take(
-                                                  3) // Show only first 3 guests
-                                              .map((guest) => _buildGuestRow(
-                                                    guest.guestName,
-                                                    _formatDateTime(guest.eta),
-                                                    _getGuestStatusColor(
-                                                        guest.eta),
-                                                  ))
-                                              .toList(),
-                                        ),
-                                ),
-                                const SizedBox(height: 16),
-
-                                // Vehicles Section
-                                _buildCard(
-                                  context: context,
-                                  title: "Vehicles",
-                                  trailingText: "Add",
-                                  viewAllText: "View All",
-                                  onViewAllTap: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) => AllVehiclesScreen(
-                                            vehicles: _vehicles),
-                                      ),
-                                    ).then((_) => _loadData());
-                                  },
-                                  onTrailingTap: () async {
-                                    // Navigate to vehicle registration
-                                    final result = await Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) =>
-                                            const VehicleRegistrationPage(),
-                                      ),
-                                    );
-
-                                    // Refresh data if vehicle was added
-                                    if (result == true) {
-                                      _loadData();
-                                    }
-                                  },
-                                  content: _vehicles.isEmpty
-                                      ? Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                              vertical: 16.0),
-                                          child: Center(
-                                            child: Text(
-                                              "No vehicles added yet",
-                                              style: TextStyle(
-                                                color: Colors.grey.shade600,
-                                                fontStyle: FontStyle.italic,
-                                              ),
-                                            ),
-                                          ),
-                                        )
-                                      : Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: _vehicles
-                                              .take(
-                                                  3) // Show only first 3 vehicles
-                                              .map(
-                                                  (vehicle) => _buildVehicleRow(
-                                                        vehicle.vehicleName,
-                                                        vehicle
-                                                            .vehicleLicensePlateNumber,
-                                                        vehicle.vehicleColor,
-                                                      ))
-                                              .toList(),
-                                        ),
-                                ),
-                              ],
+                          child: Text(
+                            vehicle.vehicleName ?? 'Unknown',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
                             ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],
                     ),
-                  ),
+                    const SizedBox(height: 8),
+                    Text(
+                      vehicle.vehicleModel ?? 'No model',
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
+                        fontSize: 12,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        vehicle.vehicleLicensePlateNumber ?? 'No plate',
+                        style: TextStyle(
+                          color: Colors.blue.shade700,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (vehicle.vehicleRfidTagId != null &&
+                        vehicle.vehicleRfidTagId!.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.nfc,
+                            size: 12,
+                            color: Colors.green.shade600,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'RFID Active',
+                            style: TextStyle(
+                              color: Colors.green.shade600,
+                              fontSize: 10,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
                 ),
-      bottomNavigationBar: BottomNavigationBar(
-        selectedItemColor: Colors.white,
-        unselectedItemColor: Colors.white70,
-        backgroundColor: const Color(0xFF600f0f),
-        currentIndex: 0,
-        onTap: (index) {
-          // Handle navigation bar taps
-          if (index == 1) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                  builder: (context) => const GuestRegistrationForm()),
-            ).then((_) => _loadData());
-          }
+              ),
+            ),
+          );
         },
-        items: const [
-          BottomNavigationBarItem(
-              icon: Icon(Icons.dashboard), label: 'Overvieww'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.person_add), label: 'Add Guest'),
-        ],
       ),
     );
   }
 
-  String _formatDateTime(DateTime dateTime) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final tomorrow = today.add(Duration(days: 1));
-    final date = DateTime(dateTime.year, dateTime.month, dateTime.day);
+  Widget _buildGuestsSection() {
+    if (_isLoading) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(32),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
 
-    if (date == today) {
-      return "Today, ${DateFormat('h:mm a').format(dateTime)}";
-    } else if (date == tomorrow) {
-      return "Tomorrow, ${DateFormat('h:mm a').format(dateTime)}";
-    } else {
-      return DateFormat('MMM d, h:mm a').format(dateTime);
-    }
-  }
-
-  Color _getGuestStatusColor(DateTime eta) {
-    final now = DateTime.now();
-    final difference = eta.difference(now);
-
-    // If ETA is within 1 hour
-    if (difference.inHours.abs() <= 1) {
-      return Colors.green;
-    }
-    // If ETA is today but more than 1 hour away
-    else if (eta.day == now.day &&
-        eta.month == now.month &&
-        eta.year == now.year) {
-      return Colors.orange;
-    }
-    // If ETA is in the future
-    else if (eta.isAfter(now)) {
-      return Colors.blue;
-    }
-    // If ETA is in the past
-    else {
-      return Colors.grey;
-    }
-  }
-
-  Widget _buildActionButton(String text, IconData icon, BuildContext context) {
-    return Expanded(
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 6),
-        child: OutlinedButton.icon(
-          onPressed: () {
-            // if (text == "Generate OTP") {
-            //   // Navigate to OTP screen
-            //   Navigator.push(
-            //     context,
-            //     MaterialPageRoute(builder: (context) => OtpScreen(email: _userProfile?.email ?? "")),
-            //   );
-            // } else
-            if (text == "Add a Guest") {
-              // Navigate to Register Guest screen
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (context) => const GuestRegistrationForm()),
-              ).then((_) => _loadData());
-            }
-          },
-          style: OutlinedButton.styleFrom(
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            side: const BorderSide(color: Colors.redAccent),
-            padding: const EdgeInsets.symmetric(vertical: 14),
+    if (_guests.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Card(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              children: [
+                Icon(
+                  Icons.people_outline,
+                  size: 48,
+                  color: Colors.grey.shade400,
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'No guests registered',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Register guests for easy entry',
+                  style: TextStyle(
+                    color: Colors.grey.shade600,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    final result = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const GuestRegistrationForm(),
+                      ),
+                    );
+                    if (result == true) {
+                      _loadData();
+                    }
+                  },
+                  icon: const Icon(Icons.add),
+                  label: const Text('Add Guest'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2D0A0A),
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ],
+            ),
           ),
-          icon: Icon(icon, size: 18, color: Colors.redAccent),
-          label: Text(text, style: const TextStyle(color: Colors.redAccent)),
+        ),
+      );
+    }
+
+    // Show recent guests (max 3)
+    final recentGuests = _guests.take(3).toList();
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        children: recentGuests.map((guest) {
+          return Card(
+            margin: const EdgeInsets.only(bottom: 8),
+            child: ListTile(
+              leading: CircleAvatar(
+                backgroundColor: const Color(0xFF2D0A0A),
+                child: Text(
+                  guest.guestName.isNotEmpty
+                      ? guest.guestName[0].toUpperCase()
+                      : '?',
+                  style: const TextStyle(color: Colors.white),
+                ),
+              ),
+              title: Text(
+                guest.guestName,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              subtitle: Text(
+                guest.guestPhoneNumber,
+                style: TextStyle(color: Colors.grey.shade600),
+              ),
+              trailing: _buildGuestStatusChip(guest),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildGuestStatusChip(GuestModel guest) {
+    Color color;
+    String label;
+
+    if (guest.visitCompleted == true) {
+      color = Colors.grey;
+      label = 'Completed';
+    } else if (guest.isVerified == true) {
+      color = Colors.green;
+      label = 'Verified';
+    } else if (guest.isExpired == true) {
+      color = Colors.red;
+      label = 'Expired';
+    } else {
+      color = Colors.orange;
+      label = 'Pending';
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.5)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );
   }
 
-  Widget _buildCard({
-    required BuildContext context,
-    required String title,
-    required String trailingText,
-    required VoidCallback onTrailingTap,
-    required Widget content,
-    String? viewAllText,
-    VoidCallback? onViewAllTap,
-  }) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFDECEC),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(title,
-                  style: const TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.w600)),
-              Row(
-                children: [
-                  if (viewAllText != null)
-                    TextButton(
-                      onPressed: onViewAllTap,
-                      child: Text(viewAllText),
-                    ),
-                  TextButton(
-                    onPressed: onTrailingTap,
-                    child: Text(trailingText),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          content,
-        ],
-      ),
-    );
-  }
-
-  Widget _buildGuestRow(String name, String time, Color color) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        children: [
-          Expanded(
-              child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(name, style: const TextStyle(fontWeight: FontWeight.w500)),
-              Text(time, style: const TextStyle(color: Colors.black54)),
-            ],
-          )),
-          CircleAvatar(radius: 8, backgroundColor: color),
-          const SizedBox(width: 10),
-          const Icon(Icons.remove_circle_outline, color: Colors.black54)
-        ],
-      ),
-    );
-  }
-
-  Widget _buildVehicleRow(String model, String plate, String color) {
-    return Padding(
-      padding: EdgeInsets.only(bottom: 12),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(model, style: TextStyle(fontWeight: FontWeight.w500)),
-                Text(plate, style: TextStyle(color: Colors.black54)),
-              ],
-            ),
-          ),
-          Container(
-            width: 16,
-            height: 16,
-            decoration: BoxDecoration(
-              color: _getColorFromName(color),
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: 2),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Color _getColorFromName(String colorName) {
-    // Simple mapping of color names to Color objects
-    switch (colorName.toLowerCase()) {
-      case 'red':
-        return Colors.red;
-      case 'blue':
-        return Colors.blue;
-      case 'green':
-        return Colors.green;
-      case 'black':
-        return Colors.black;
-      case 'white':
-        return Colors.white;
-      case 'silver':
-      case 'grey':
-      case 'gray':
-        return Colors.grey;
-      case 'yellow':
-        return Colors.yellow;
-      case 'orange':
-        return Colors.orange;
-      case 'purple':
-        return Colors.purple;
-      case 'brown':
-        return Colors.brown;
+  IconData _getVehicleIcon(String? type) {
+    switch (type?.toLowerCase()) {
+      case 'car':
+        return Icons.directions_car;
+      case 'motorcycle':
+        return Icons.two_wheeler;
+      case 'truck':
+        return Icons.local_shipping;
+      case 'suv':
+        return Icons.directions_car_filled;
+      case 'van':
+        return Icons.airport_shuttle;
       default:
-        return Color(0xFF600f0f); // Default color
+        return Icons.directions_car;
     }
+  }
+}
+
+class _QuickActionCard extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _QuickActionCard({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, color: color, size: 24),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+            Icon(
+              Icons.arrow_forward_ios,
+              size: 16,
+              color: Colors.grey.shade400,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

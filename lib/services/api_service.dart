@@ -13,6 +13,7 @@ import '../models/create_profile_model.dart';
 import '../models/update_password_model.dart';
 import '../models/vehicle_model.dart';
 import '../models/guest_model.dart';
+import '../models/residence_model.dart';
 
 class ApiService {
   // 1) our custom HTTP client that injects Authorization header
@@ -338,15 +339,21 @@ class ApiService {
   /// ─── VEHICLE: GET /Vehicles/user/me ─────────────────────────────────────
   /// ✅ CHANGED: /vehicle → /Vehicles/user/me
   Future<List<VehicleModel>> getVehicles() async {
-    final uri = Uri.parse('$_baseUrl/Vehicles/user/me');  // ✅ Changed endpoint
-    
+    final uri = Uri.parse('$_baseUrl/Vehicles');
+
+    debugPrint('Fetching vehicles from: $uri');
+
     final res = await _client.get(uri);
 
+    debugPrint('Get vehicles response status: ${res.statusCode}');
+    debugPrint('Get vehicles response body: ${res.body}');
+
     if (res.statusCode == 200) {
-      final List<dynamic> vehiclesJson = jsonDecode(res.body);
-      return vehiclesJson.map((json) => VehicleModel.fromJson(json)).toList();
+      final List<dynamic> data = jsonDecode(res.body);
+      debugPrint('Received ${data.length} vehicles');
+      return data.map((json) => VehicleModel.fromJson(json)).toList();
     } else {
-      throw Exception('Fetch vehicles failed (${res.statusCode}): ${res.body}');
+      throw Exception('Failed to fetch vehicles (${res.statusCode})');
     }
   }
 
@@ -498,6 +505,109 @@ class ApiService {
         errorMessage = 'Resend OTP failed (${res.statusCode}): ${res.body}';
       }
       throw Exception(errorMessage);
+    }
+  }
+
+  // ─── RESIDENCE MANAGEMENT ───────────────────────────────────────────────
+
+  /// Get all user residences
+  Future<List<ResidenceModel>> getResidences() async {
+    final uri = Uri.parse('$_baseUrl/Profile/residences');
+    
+    debugPrint('Fetching residences from: $uri');
+    
+    final res = await _client.get(uri);
+    debugPrint('Get residences response status: ${res.statusCode}');
+    
+    if (res.statusCode == 200) {
+      final List<dynamic> data = jsonDecode(res.body);
+      debugPrint('Received ${data.length} residences');
+      return data.map((json) => ResidenceModel.fromJson(json)).toList();
+    } else {
+      throw Exception('Failed to fetch residences (${res.statusCode})');
+    }
+  }
+
+  /// Get specific residence details
+  Future<ResidenceModel> getResidenceDetails(String residenceId) async {
+    final uri = Uri.parse('$_baseUrl/Profile/residences/$residenceId');
+    
+    final res = await _client.get(uri);
+    
+    if (res.statusCode == 200) {
+      return ResidenceModel.fromJson(jsonDecode(res.body));
+    } else {
+      throw Exception('Failed to fetch residence details (${res.statusCode})');
+    }
+  }
+
+  /// Add new residence
+  Future<void> addResidence(AddResidenceDto dto) async {
+    final uri = Uri.parse('$_baseUrl/Profile/add-residence');
+    
+    debugPrint('Adding residence: ${dto.toJson()}');
+    
+    final res = await _client.post(
+      uri,
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(dto.toJson()),
+    );
+    
+    if (res.statusCode != 200 && res.statusCode != 201) {
+      final error = jsonDecode(res.body)['message'] ?? 'Failed to add residence';
+      throw Exception(error);
+    }
+  }
+
+  /// Set residence as primary
+  Future<void> setPrimaryResidence(String residenceId) async {
+    final uri = Uri.parse('$_baseUrl/Profile/residences/$residenceId/set-primary');
+    
+    final res = await _client.patch(uri);
+    
+    if (res.statusCode != 200) {
+      final error = jsonDecode(res.body)['message'] ?? 'Failed to set primary residence';
+      throw Exception(error);
+    }
+  }
+
+  /// Delete residence
+  Future<void> deleteResidence(String residenceId) async {
+    final uri = Uri.parse('$_baseUrl/Profile/residences/$residenceId');
+    
+    final res = await _client.delete(uri);
+    
+    if (res.statusCode != 200) {
+      final error = jsonDecode(res.body)['message'] ?? 'Failed to delete residence';
+      throw Exception(error);
+    }
+  }
+
+  /// Get guests by residence
+  Future<List<GuestModel>> getGuestsByResidence(String residenceId) async {
+    final uri = Uri.parse('$_baseUrl/Guests/residence/$residenceId');
+    
+    final res = await _client.get(uri);
+    
+    if (res.statusCode == 200) {
+      final List<dynamic> data = jsonDecode(res.body);
+      return data.map((json) => GuestModel.fromJson(json)).toList();
+    } else {
+      throw Exception('Failed to fetch guests (${res.statusCode})');
+    }
+  }
+
+  /// Get vehicles by residence
+  Future<List<VehicleModel>> getVehiclesByResidence(String residenceId) async {
+    final uri = Uri.parse('$_baseUrl/Vehicles/residence/$residenceId');
+    
+    final res = await _client.get(uri);
+    
+    if (res.statusCode == 200) {
+      final List<dynamic> data = jsonDecode(res.body);
+      return data.map((json) => VehicleModel.fromJson(json)).toList();
+    } else {
+      throw Exception('Failed to fetch vehicles (${res.statusCode})');
     }
   }
 }
