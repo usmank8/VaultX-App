@@ -9,6 +9,7 @@ import 'package:vaultx_solution/screens/all_guests_screen.dart';
 import 'package:vaultx_solution/screens/all_vehicles_screen.dart';
 import 'package:vaultx_solution/models/vehicle_model.dart';
 import 'package:vaultx_solution/models/guest_model.dart';
+import 'package:vaultx_solution/models/residence_model.dart';
 import 'package:vaultx_solution/services/api_service.dart';
 import 'package:vaultx_solution/widgets/residence_selector_widget.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -25,9 +26,12 @@ class _DashboardPageState extends State<DashboardPage> {
 
   bool _isLoading = true;
   String? _errorMessage;
-  List<VehicleModel> _vehicles = [];
-  List<GuestModel> _guests = [];
+  List<VehicleModel> _allVehicles = []; // All vehicles across residences
+  List<VehicleModel> _residenceVehicles = []; // Vehicles for selected residence
+  List<GuestModel> _allGuests = []; // All guests across residences
+  List<GuestModel> _residenceGuests = []; // Guests for selected residence
   String? _selectedResidenceId;
+  ResidenceModel? _selectedResidence;
 
   @override
   void initState() {
@@ -49,14 +53,18 @@ class _DashboardPageState extends State<DashboardPage> {
     });
 
     try {
-      // Load vehicles and guests
+      // Load all vehicles and guests
       final vehicles = await _apiService.getVehicles();
       final guests = await _apiService.getGuests();
 
       if (mounted) {
         setState(() {
-          _vehicles = vehicles;
-          _guests = guests;
+          _allVehicles = vehicles;
+          _allGuests = guests;
+          
+          // Filter by selected residence
+          _filterByResidence();
+          
           _isLoading = false;
         });
       }
@@ -71,9 +79,44 @@ class _DashboardPageState extends State<DashboardPage> {
     }
   }
 
+  void _filterByResidence() {
+    if (_selectedResidenceId != null && _selectedResidenceId!.isNotEmpty) {
+      // Filter vehicles by residence ID
+      _residenceVehicles = _allVehicles.where((v) {
+        final vehicleResidenceId = v.residenceId?.toString().toLowerCase();
+        final selectedId = _selectedResidenceId?.toLowerCase();
+        return vehicleResidenceId == selectedId;
+      }).toList();
+      
+      // Filter guests by residence ID
+      _residenceGuests = _allGuests.where((g) {
+        final guestResidenceId = g.residenceId?.toString().toLowerCase();
+        final selectedId = _selectedResidenceId?.toLowerCase();
+        return guestResidenceId == selectedId;
+      }).toList();
+      
+      debugPrint('Selected Residence ID: $_selectedResidenceId');
+      debugPrint('Total vehicles: ${_allVehicles.length}, Filtered: ${_residenceVehicles.length}');
+      debugPrint('Total guests: ${_allGuests.length}, Filtered: ${_residenceGuests.length}');
+    } else {
+      // No residence selected, show all
+      _residenceVehicles = _allVehicles;
+      _residenceGuests = _allGuests;
+    }
+  }
+
   void _onResidenceChanged(dynamic residence) {
     debugPrint('Residence changed: ${residence.id}');
-    _loadData();
+    setState(() {
+      _selectedResidenceId = residence.id;
+      _selectedResidence = residence;
+      _filterByResidence();
+    });
+    
+    // Also save to SharedPreferences
+    SharedPreferences.getInstance().then((prefs) {
+      prefs.setString('selected_residence_id', residence.id);
+    });
   }
 
   @override
@@ -172,8 +215,8 @@ class _DashboardPageState extends State<DashboardPage> {
                                   label: 'Add Vehicle',
                                   color: Colors.green,
                                   onTap: () async {
-                                    // Check vehicle count first
-                                    if (_vehicles.length >= 4) {
+                                    // Check vehicle count for THIS residence
+                                    if (_residenceVehicles.length >= 4) {
                                       ScaffoldMessenger.of(context).showSnackBar(
                                         const SnackBar(
                                           content: Text('Maximum 4 vehicles allowed per residence'),
@@ -202,16 +245,16 @@ class _DashboardPageState extends State<DashboardPage> {
 
                     const SizedBox(height: 24),
 
-                    // Vehicles Section
+                    // Vehicles Section - USE _residenceVehicles
                     _buildSectionHeader(
                       title: 'My Vehicles',
-                      count: _vehicles.length,
+                      count: _residenceVehicles.length, // ✅ Use filtered count
                       maxCount: 4,
                       onViewAll: () {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => AllVehiclesScreen(vehicles: _vehicles),
+                            builder: (_) => AllVehiclesScreen(vehicles: _residenceVehicles), // ✅ Pass filtered list
                           ),
                         );
                       },
@@ -221,15 +264,15 @@ class _DashboardPageState extends State<DashboardPage> {
 
                     const SizedBox(height: 24),
 
-                    // Guests Section
+                    // Guests Section - USE _residenceGuests
                     _buildSectionHeader(
                       title: 'Recent Guests',
-                      count: _guests.length,
+                      count: _residenceGuests.length, // ✅ Use filtered count
                       onViewAll: () {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => AllGuestsScreen(guests: _guests),
+                            builder: (_) => AllGuestsScreen(guests: _residenceGuests), // ✅ Pass filtered list
                           ),
                         );
                       },
@@ -333,7 +376,8 @@ class _DashboardPageState extends State<DashboardPage> {
       );
     }
 
-    if (_vehicles.isEmpty) {
+    // ✅ Use _residenceVehicles instead of _vehicles
+    if (_residenceVehicles.isEmpty) {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Card(
@@ -389,18 +433,18 @@ class _DashboardPageState extends State<DashboardPage> {
       );
     }
 
-    // Show vehicles in horizontal scroll
+    // ✅ Show vehicles for selected residence in horizontal scroll
     return SizedBox(
       height: 140,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: _vehicles.length,
+        itemCount: _residenceVehicles.length, // ✅ Use filtered list
         itemBuilder: (context, index) {
-          final vehicle = _vehicles[index];
+          final vehicle = _residenceVehicles[index]; // ✅ Use filtered list
           return Container(
             width: 200,
-            margin: EdgeInsets.only(right: index < _vehicles.length - 1 ? 12 : 0),
+            margin: EdgeInsets.only(right: index < _residenceVehicles.length - 1 ? 12 : 0),
             child: Card(
               elevation: 2,
               shape: RoundedRectangleBorder(
@@ -509,7 +553,8 @@ class _DashboardPageState extends State<DashboardPage> {
       );
     }
 
-    if (_guests.isEmpty) {
+    // ✅ Use _residenceGuests instead of _guests
+    if (_residenceGuests.isEmpty) {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Card(
@@ -565,8 +610,8 @@ class _DashboardPageState extends State<DashboardPage> {
       );
     }
 
-    // Show recent guests (max 3)
-    final recentGuests = _guests.take(3).toList();
+    // Show recent guests (max 3) - ✅ Use filtered list
+    final recentGuests = _residenceGuests.take(3).toList();
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -610,7 +655,7 @@ class _DashboardPageState extends State<DashboardPage> {
     } else if (guest.isVerified == true) {
       color = Colors.green;
       label = 'Verified';
-    } else if (guest.isExpired == true) {
+    } else if (guest.isExpired) {
       color = Colors.red;
       label = 'Expired';
     } else {

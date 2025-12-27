@@ -2,58 +2,87 @@ class GuestModel {
   final String guestId;
   final String guestName;
   final String guestPhoneNumber;
-  final DateTime eta;
+  final String? gender;
+  final DateTime? eta;
   final DateTime? checkoutTime;
+  final DateTime? actualArrivalTime;
   final String? status;
-  final bool? visitCompleted;
-  final bool? isVerified;
   final String? qrCode;
+  final bool? isVerified;
+  final bool? visitCompleted;
+  final String? residenceId;
+  final String? residenceName;
+  final DateTime? createdAt;
   final String? vehicleId;
   final String? vehicleModel;
   final String? vehicleLicensePlateNumber;
   final String? vehicleColor;
-  final bool? isGuest;
 
   GuestModel({
     required this.guestId,
     required this.guestName,
     required this.guestPhoneNumber,
-    required this.eta,
+    this.gender,
+    this.eta,
     this.checkoutTime,
+    this.actualArrivalTime,
     this.status,
-    this.visitCompleted,
-    this.isVerified,
     this.qrCode,
+    this.isVerified,
+    this.visitCompleted,
+    this.residenceId,
+    this.residenceName,
+    this.createdAt,
     this.vehicleId,
     this.vehicleModel,
     this.vehicleLicensePlateNumber,
     this.vehicleColor,
-    this.isGuest,
   });
-
-  // Computed property - check if guest is expired based on checkoutTime
-  bool get isExpired {
-    if (checkoutTime == null) return false;
-    return DateTime.now().isAfter(checkoutTime!);
-  }
 
   factory GuestModel.fromJson(Map<String, dynamic> json) {
     return GuestModel(
-      guestId: json['guestId'] ?? '',
-      guestName: json['guestName'] ?? '',
-      guestPhoneNumber: json['guestPhoneNumber'] ?? '',
-      eta: json['eta'] != null ? DateTime.parse(json['eta']) : DateTime.now(),
-      checkoutTime: json['checkoutTime'] != null ? DateTime.parse(json['checkoutTime']) : null,
-      status: json['status'],
-      visitCompleted: json['visitCompleted'],
-      isVerified: json['isVerified'],
-      qrCode: json['qrCode'],
-      vehicleId: json['vehicleId'],
-      vehicleModel: json['vehicleModel'],
-      vehicleLicensePlateNumber: json['vehicleLicensePlateNumber'],
-      vehicleColor: json['vehicleColor'],
-      isGuest: json['isGuest'],
+      guestId: json['guestId'] as String? ?? '',
+      guestName: json['guestName'] as String? ?? '',
+      guestPhoneNumber: json['guestPhoneNumber'] as String? ?? '',
+      gender: json['gender'] as String?,
+      eta: json['eta'] != null ? DateTime.tryParse(json['eta'] as String) : null,
+      checkoutTime: json['checkoutTime'] != null 
+          ? DateTime.tryParse(json['checkoutTime'] as String) 
+          : null,
+      actualArrivalTime: json['actualArrivalTime'] != null 
+          ? DateTime.tryParse(json['actualArrivalTime'] as String) 
+          : null,
+      status: json['status'] as String?,
+      qrCode: json['qrCode'] as String?,
+      isVerified: json['isVerified'] as bool?,
+      visitCompleted: json['visitCompleted'] as bool?,
+      residenceId: json['residenceId']?.toString(),
+      residenceName: json['residenceName'] as String?,
+      createdAt: json['createdAt'] != null 
+          ? DateTime.tryParse(json['createdAt'] as String) 
+          : null,
+      vehicleId: json['vehicleId'] as String?,
+      vehicleModel: json['vehicleModel'] as String?,
+      vehicleLicensePlateNumber: json['vehicleLicensePlateNumber'] as String?,
+      vehicleColor: json['vehicleColor'] as String?,
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'guestId': guestId,
+      'guestName': guestName,
+      'guestPhoneNumber': guestPhoneNumber,
+      if (gender != null) 'gender': gender,
+      if (eta != null) 'eta': eta!.toIso8601String(),
+      if (checkoutTime != null) 'checkoutTime': checkoutTime!.toIso8601String(),
+      if (residenceId != null) 'residenceId': residenceId,
+    };
+  }
+
+  bool get isExpired {
+    if (checkoutTime == null) return false;
+    return checkoutTime!.isBefore(DateTime.now());
   }
 }
 

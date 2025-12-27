@@ -36,9 +36,11 @@ class _AllGuestsScreenState extends State<AllGuestsScreen> {
         // Apply status filter
         bool statusMatches = true;
         if (_filterOption == 'Upcoming') {
-          statusMatches = guest.eta.isAfter(DateTime.now());
+          // ✅ Line 39 - Check if eta is not null before comparing
+          statusMatches = guest.eta != null && guest.eta!.isAfter(DateTime.now());
         } else if (_filterOption == 'Past') {
-          statusMatches = guest.eta.isBefore(DateTime.now());
+          // ✅ Line 41 - Check if eta is not null before comparing
+          statusMatches = guest.eta != null && guest.eta!.isBefore(DateTime.now());
         }
         
         return nameMatches && statusMatches;
@@ -251,7 +253,8 @@ class _AllGuestsScreenState extends State<AllGuestsScreen> {
 
   Widget _buildGuestCard(GuestModel guest) {
     final now = DateTime.now();
-    final isUpcoming = guest.eta.isAfter(now);
+    // ✅ Line 254 - Check if eta is not null before comparing
+    final isUpcoming = guest.eta != null && guest.eta!.isAfter(now);
     
     return Card(
       margin: EdgeInsets.only(bottom: 16),
@@ -269,7 +272,9 @@ class _AllGuestsScreenState extends State<AllGuestsScreen> {
                 CircleAvatar(
                   backgroundColor: Color(0xFFD6A19F),
                   child: Text(
-                    guest.guestName[0].toUpperCase(),
+                    guest.guestName.isNotEmpty 
+                        ? guest.guestName[0].toUpperCase()
+                        : '?',
                     style: TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
@@ -298,7 +303,10 @@ class _AllGuestsScreenState extends State<AllGuestsScreen> {
                           ),
                           SizedBox(width: 4),
                           Text(
-                            DateFormat('MMM dd, yyyy - hh:mm a').format(guest.eta),
+                            // ✅ Line 330 - Handle null eta
+                            guest.eta != null 
+                                ? DateFormat('MMM dd, yyyy - hh:mm a').format(guest.eta!)
+                                : 'No date set',
                             style: TextStyle(
                               color: Colors.grey.shade600,
                             ),
@@ -390,10 +398,93 @@ class _AllGuestsScreenState extends State<AllGuestsScreen> {
                 ),
               ],
             ],
+            
+            // ✅ Show phone number instead (which exists in GuestModel)
+            SizedBox(height: 16),
+            Divider(),
+            SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(
+                  Icons.phone,
+                  size: 16,
+                  color: Colors.grey.shade600,
+                ),
+                SizedBox(width: 8),
+                Text(
+                  'Phone:',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey.shade700,
+                  ),
+                ),
+                SizedBox(width: 8),
+                Text(
+                  guest.guestPhoneNumber,
+                  style: TextStyle(
+                    color: Colors.grey.shade700,
+                  ),
+                ),
+              ],
+            ),
+            
+            // Show status if available
+            if (guest.status != null) ...[
+              SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(
+                    Icons.info_outline,
+                    size: 16,
+                    color: Colors.grey.shade600,
+                  ),
+                  SizedBox(width: 8),
+                  Text(
+                    'Status:',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey.shade700,
+                    ),
+                  ),
+                  SizedBox(width: 8),
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: _getStatusColor(guest.status!).withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: _getStatusColor(guest.status!)),
+                    ),
+                    child: Text(
+                      guest.status!,
+                      style: TextStyle(
+                        color: _getStatusColor(guest.status!),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
       ),
     );
+  }
+  
+  Color _getStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'verified':
+      case 'approved':
+        return Colors.green;
+      case 'pending':
+        return Colors.orange;
+      case 'rejected':
+      case 'expired':
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
   }
   
   Color _getColorFromName(String colorName) {
