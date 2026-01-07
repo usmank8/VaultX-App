@@ -1,4 +1,5 @@
 // lib/services/api_service.dart
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -16,495 +17,461 @@ import '../models/guest_model.dart';
 import '../models/residence_model.dart';
 
 class ApiService {
-  // 1) our custom HTTP client that injects Authorization header
-  final AuthenticatedClient _client = AuthenticatedClient();
+  // Singleton pattern
+  static final ApiService _instance = ApiService._internal();
+  factory ApiService() => _instance;
+  ApiService._internal();
 
-  // 2) Base URL switches for Android vs iOS/web
+  // Authenticated client for protected endpoints
+  final AuthenticatedClient _client = AuthenticatedClient();
+  
+  // Simple HTTP client for public endpoints (login, signup, OTP)
+  final http.Client _publicClient = http.Client();
+
+  // Base URL
   String get _baseUrl {
-    if (Platform.isAndroid) {
-      return 'http://10.0.2.2:5280/api';
-    } else {
-      return 'http://10.0.2.2:5280/api';  // ✅ Added /api
+    if (kIsWeb) {
+      return 'http://localhost:5280/api';
     }
+    // ✅ Works for BOTH emulator AND physical device (after adb reverse)
+    return 'http://localhost:5280/api';
   }
 
-  // Add in-memory token storage
+  // In-memory token
   String? _inMemoryToken;
 
-  // Set token in memory
   void setInMemoryToken(String token) {
     _inMemoryToken = token;
     _client.setToken(token);
+    debugPrint('✅ Token set in memory');
   }
 
-  // Add this method to debug the token
   void debugToken() {
     _client.debugToken();
   }
 
   /// ─── SIGN UP (public) ───────────────────────────────────────────
-  /// ✅ CHANGED: /auth/signup → /auth/register
   Future<void> signUp(SignUpModel dto) async {
-    final uri = Uri.parse('$_baseUrl/auth/register');  // ✅ Changed endpoint
+    final uri = Uri.parse('$_baseUrl/Auth/register');
+    debugPrint('📤 Signup request to: $uri');
+    debugPrint('📤 Signup body: ${jsonEncode(dto.toJson())}');
 
     try {
-      debugPrint('Sending signup request to: $uri');
-      debugPrint('Request body: ${jsonEncode(dto.toJson())}');
+      final res = await _publicClient
+          .post(
+            uri,
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: jsonEncode(dto.toJson()),
+          )
+          .timeout(const Duration(seconds: 30));
 
-      final res = await http.post(
-        uri,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(dto.toJson()),
-      );
-
-      debugPrint('Signup response status: ${res.statusCode}');
+      debugPrint('📥 Signup response status: ${res.statusCode}');
+      debugPrint('📥 Signup response body: ${res.body}');
 
       if (res.statusCode == 200 || res.statusCode == 201) {
-        debugPrint('Signup successful');
         return;
       } else {
-        // Try to parse error message from response
-        String errorMessage;
+        String errorMessage = 'Signup failed';
         try {
           final errorBody = jsonDecode(res.body);
-          errorMessage =
-              errorBody['message'] ?? 'Signup failed (${res.statusCode})';
-        } catch (_) {
-          errorMessage = 'Signup failed (${res.statusCode}): ${res.body}';
-        }
-
-        debugPrint('Signup error: $errorMessage');
+          errorMessage = errorBody['message'] ?? errorBody['Message'] ?? 'Signup failed (${res.statusCode})';
+        } catch (_) {}
         throw Exception(errorMessage);
       }
+    } on TimeoutException {
+      debugPrint('❌ Signup timeout');
+      throw Exception('Request timed out. Please check your connection.');
+    } on SocketException catch (e) {
+      debugPrint('❌ Signup socket error: $e');
+      throw Exception('Network error. Please check if the server is running.');
     } catch (e) {
-      if (e is Exception) {
-        rethrow;
-      }
-      throw Exception('Network error: ${e.toString()}');
+      debugPrint('❌ Signup error: $e');
+      rethrow;
     }
   }
 
   /// ─── LOGIN (public) ─────────────────────────────────────────────
-  /// ✅ Already correct - no changes needed
   Future<String?> login(SignInModel dto) async {
     final uri = Uri.parse('$_baseUrl/Auth/login');
+    
+    debugPrint('📤 Login request to: $uri');
+    debugPrint('📤 Login body: ${jsonEncode(dto.toJson())}');
 
-    debugPrint('Sending login request to: $uri');
-    debugPrint('Request body: ${jsonEncode(dto.toJson())}');
+    try {
+      final res = await _publicClient
+          .post(
+            uri,
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: jsonEncode(dto.toJson()),
+          )
+          .timeout(const Duration(seconds: 30));
 
-    final res = await http.post(
-      uri,
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(dto.toJson()),
-    );
+      debugPrint('📥 Login response status: ${res.statusCode}');
+      debugPrint('📥 Login response body: ${res.body}');
 
-    debugPrint('Login response status: ${res.statusCode}');
-    debugPrint('Login response body: ${res.body}');
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        final body = jsonDecode(res.body) as Map<String, dynamic>;
 
-    if (res.statusCode == 200 || res.statusCode == 201) {
-      final body = jsonDecode(res.body) as Map<String, dynamic>;
+        // Extract token (handle different cases)
+        String? token = body['accessToken'] ?? 
+                        body['AccessToken'] ?? 
+                        body['token'] ?? 
+                        body['Token'];
 
-      // ✅ Extract accessToken (handle both cases)
-      String? token;
-      if (body.containsKey('accessToken')) {
-        token = body['accessToken'] as String?;
-      } else if (body.containsKey('AccessToken')) {
-        token = body['AccessToken'] as String?;
+        if (token == null || token.isEmpty) {
+          debugPrint('❌ Token not found in response: $body');
+          throw Exception('Token not found in response');
+        }
+
+        // Save token
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('jwt_token', token);
+        _inMemoryToken = token;
+        _client.setToken(token);
+
+        // Save approval status
+        bool isApproved = body['isApprovedBySociety'] == true || 
+                          body['IsApprovedBySociety'] == true;
+        await prefs.setBool('isApprovedBySociety', isApproved);
+        
+        debugPrint('✅ Login successful, token saved, approved: $isApproved');
+        return token;
+      } else if (res.statusCode == 401) {
+        throw Exception('Invalid email or password');
+      } else if (res.statusCode == 404) {
+        throw Exception('User not found');
+      } else {
+        String errorMessage = 'Login failed';
+        try {
+          final errorBody = jsonDecode(res.body);
+          errorMessage = errorBody['message'] ?? errorBody['Message'] ?? 'Login failed (${res.statusCode})';
+        } catch (_) {}
+        throw Exception(errorMessage);
       }
-
-      if (token == null || token.isEmpty) {
-        throw Exception('Token not found in response');
-      }
-
-      // Save token
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('jwt_token', token);
-
-      // ✅ Save approval status (handle both field names)
-      bool isApproved = false;
-      if (body.containsKey('isApprovedBySociety')) {
-        isApproved = body['isApprovedBySociety'] == true;
-      } else if (body.containsKey('IsApprovedBySociety')) {
-        isApproved = body['IsApprovedBySociety'] == true;
-      }
-      
-      await prefs.setBool('isApprovedBySociety', isApproved);
-      debugPrint('✅ Approval status saved: $isApproved');
-
-      return token;
-    } else {
-      String errorMessage;
-      try {
-        final errorBody = jsonDecode(res.body);
-        errorMessage = errorBody['message'] ?? 'Login failed (${res.statusCode})';
-      } catch (_) {
-        errorMessage = 'Login failed (${res.statusCode}): ${res.body}';
-      }
-      debugPrint('Login error: $errorMessage');
-      throw Exception(errorMessage);
+    } on TimeoutException {
+      debugPrint('❌ Login timeout');
+      throw Exception('Request timed out. Please check your connection.');
+    } on SocketException catch (e) {
+      debugPrint('❌ Login socket error: $e');
+      throw Exception('Cannot connect to server. Please check if the server is running.');
+    } catch (e) {
+      debugPrint('❌ Login error: $e');
+      rethrow;
     }
   }
 
   /// ─── LOGOUT ─────────────────────────────────────────────────────
-  /// ✅ No changes needed
   Future<void> logout() async {
+    _inMemoryToken = null;
+    _client.clearToken();
+    
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('jwt_token');
+      await prefs.remove('isApprovedBySociety');
+      await prefs.remove('selected_residence_id');
+      debugPrint('✅ Logged out');
     } catch (e) {
-      debugPrint('Failed to remove token from SharedPreferences: $e');
+      debugPrint('Failed to clear preferences: $e');
     }
+  }
 
-    // Always clear the in-memory token
-    _inMemoryToken = null;
-    _client.clearToken();
+  /// ─── OTP: SEND ────────────────────────────────────────────────
+  Future<void> sendOtp(String email) async {
+    final uri = Uri.parse('$_baseUrl/Auth/send-otp');
+    debugPrint('📤 SendOtp request to: $uri');
+
+    try {
+      final res = await _publicClient
+          .post(
+            uri,
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: jsonEncode({'email': email}),
+          )
+          .timeout(const Duration(seconds: 30));
+
+      debugPrint('📥 SendOtp response: ${res.statusCode}');
+
+      if (res.statusCode != 200 && res.statusCode != 201) {
+        String errorMessage = 'Failed to send OTP';
+        try {
+          final errorBody = jsonDecode(res.body);
+          errorMessage = errorBody['message'] ?? errorBody['Message'] ?? errorMessage;
+        } catch (_) {}
+        throw Exception(errorMessage);
+      }
+    } on TimeoutException {
+      throw Exception('Request timed out');
+    } catch (e) {
+      debugPrint('❌ SendOtp error: $e');
+      rethrow;
+    }
+  }
+
+  /// ─── OTP: VERIFY ───────────────────────────────────────────────
+  Future<void> verifyOtp(String email, String otp) async {
+    final uri = Uri.parse('$_baseUrl/Auth/verify-otp');
+    debugPrint('📤 VerifyOtp request to: $uri');
+
+    try {
+      final res = await _publicClient
+          .post(
+            uri,
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: jsonEncode({
+              'email': email,
+              'otp': otp,
+            }),
+          )
+          .timeout(const Duration(seconds: 30));
+
+      debugPrint('📥 VerifyOtp response: ${res.statusCode}');
+
+      if (res.statusCode != 200 && res.statusCode != 201) {
+        String errorMessage = 'Invalid OTP';
+        try {
+          final errorBody = jsonDecode(res.body);
+          errorMessage = errorBody['message'] ?? errorBody['Message'] ?? errorMessage;
+        } catch (_) {}
+        throw Exception(errorMessage);
+      }
+    } on TimeoutException {
+      throw Exception('Request timed out');
+    } catch (e) {
+      debugPrint('❌ VerifyOtp error: $e');
+      rethrow;
+    }
+  }
+
+  /// ─── OTP: RESEND ───────────────────────────────────────────────
+  Future<void> resendOtp(String email) async {
+    // Resend uses the same endpoint as send
+    await sendOtp(email);
   }
 
   /// ─── PROFILE: GET /Profile/me ───────────────────────────────────
-  /// ✅ Already correct - no changes needed
   Future<CreateProfileModel?> getProfile() async {
     final uri = Uri.parse('$_baseUrl/Profile/me');
+    debugPrint('📤 GetProfile request to: $uri');
 
-    debugPrint('Fetching profile from: $uri');
-    debugPrint('Token being used: ${await _getTokenForDebug()}');
-
-    final res = await _client.get(uri);
-
-    debugPrint('Get profile response status: ${res.statusCode}');
-    debugPrint('Get profile response body: ${res.body}');
-
-    if (res.statusCode == 200) {
-      try {
-        final jsonBody = jsonDecode(res.body);
-        debugPrint('Parsed JSON structure: ${jsonBody.keys.join(", ")}');
-        final profileData = CreateProfileModel.fromJson(jsonBody);
-        debugPrint('Profile parsed successfully: ${profileData.email}');
-        return profileData;
-      } catch (e, stackTrace) {
-        debugPrint('Error parsing profile: $e');
-        debugPrint('Stack trace: $stackTrace');
-        rethrow;
-      }
-    } else if (res.statusCode == 404) {
-      debugPrint('No profile found (404) - user needs to create profile');
-      return null;
-    } else {
-      String errorMessage;
-      try {
-        final errorBody = jsonDecode(res.body);
-        errorMessage = errorBody['message'] ?? errorBody['title'] ?? 'Fetch profile failed (${res.statusCode})';
-        debugPrint('Error response JSON: $errorBody');
-      } catch (_) {
-        errorMessage = 'Fetch profile failed (${res.statusCode}): ${res.body}';
-      }
-      debugPrint('Get profile error: $errorMessage');
-      throw Exception(errorMessage);
-    }
-  }
-
-  // Helper method to get token for debugging
-  Future<String> _getTokenForDebug() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('jwt_token');
-      return token != null ? '${token.substring(0, 20)}...' : 'No token';
-    } catch (_) {
-      return 'Error reading token';
+      final res = await _client.get(uri).timeout(const Duration(seconds: 30));
+      debugPrint('📥 GetProfile response: ${res.statusCode}');
+      debugPrint('📥 GetProfile body: ${res.body}');
+
+      if (res.statusCode == 200) {
+        final jsonBody = jsonDecode(res.body);
+        return CreateProfileModel.fromJson(jsonBody);
+      } else if (res.statusCode == 404) {
+        debugPrint('ℹ️ No profile found');
+        return null;
+      } else if (res.statusCode == 401) {
+        throw Exception('Unauthorized - please login again');
+      } else {
+        throw Exception('Failed to fetch profile (${res.statusCode})');
+      }
+    } on TimeoutException {
+      throw Exception('Request timed out');
+    } catch (e) {
+      debugPrint('❌ GetProfile error: $e');
+      rethrow;
     }
   }
 
   /// ─── PROFILE: POST /Profile/create ──────────────────────────────
-  /// ✅ CHANGED: /profile/create → /Profile/create (capitalized)
   Future<void> createProfile(CreateProfileModel dto) async {
-    final uri = Uri.parse('$_baseUrl/Profile/create');  // ✅ Capitalized Profile
-
-    debugPrint('About to create profile, checking token:');
-    _client.debugToken();
-
-    final requestBody = jsonEncode(dto.toJson());
-    debugPrint('Profile create request body: $requestBody');
+    final uri = Uri.parse('$_baseUrl/Profile/create');
+    debugPrint('📤 CreateProfile request to: $uri');
+    debugPrint('📤 CreateProfile body: ${jsonEncode(dto.toJson())}');
 
     try {
-      final res = await _client.post(
-        uri,
-        headers: {'Content-Type': 'application/json'},
-        body: requestBody,
-      );
+      final res = await _client
+          .post(
+            uri,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode(dto.toJson()),
+          )
+          .timeout(const Duration(seconds: 30));
 
-      debugPrint('Profile create response status: ${res.statusCode}');
-      debugPrint('Profile create response body: ${res.body}');
+      debugPrint('📥 CreateProfile response: ${res.statusCode}');
+      debugPrint('📥 CreateProfile body: ${res.body}');
 
       if (res.statusCode != 200 && res.statusCode != 201) {
-        String errorMessage;
+        String errorMessage = 'Failed to create profile';
         try {
           final errorBody = jsonDecode(res.body);
-          errorMessage = errorBody['message'] ??
-              'Create profile failed (${res.statusCode})';
-        } catch (_) {
-          errorMessage =
-              'Create profile failed (${res.statusCode}): ${res.body}';
-        }
-
+          errorMessage = errorBody['message'] ?? errorBody['Message'] ?? errorMessage;
+        } catch (_) {}
         throw Exception(errorMessage);
       }
+    } on TimeoutException {
+      throw Exception('Request timed out');
     } catch (e) {
-      debugPrint('Profile create error: $e');
-      if (e is Exception) {
-        rethrow;
-      }
-      throw Exception('Network error: ${e.toString()}');
+      debugPrint('❌ CreateProfile error: $e');
+      rethrow;
     }
   }
 
   /// ─── PROFILE: PUT /Profile/update ──────────────────────────────
-  /// ✅ CHANGED: /profile/update → /Profile/update + PATCH → PUT
   Future<void> updateProfile(UpdateProfileModel dto) async {
-    final uri = Uri.parse('$_baseUrl/Profile/update');  // ✅ Capitalized Profile
-
-    debugPrint('About to update profile, checking token:');
-    _client.debugToken();
-
-    final requestBody = jsonEncode(dto.toJson());
-    debugPrint('Profile update request body: $requestBody');
+    final uri = Uri.parse('$_baseUrl/Profile/update');
 
     try {
-      final res = await _client.put(  // ✅ Changed from patch to put
-        uri,
-        headers: {'Content-Type': 'application/json'},
-        body: requestBody,
-      );
+      final res = await _client
+          .put(
+            uri,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode(dto.toJson()),
+          )
+          .timeout(const Duration(seconds: 30));
 
-      debugPrint('Profile update response status: ${res.statusCode}');
-      debugPrint('Profile update response body: ${res.body}');
-
-      if (res.statusCode != 200 && res.statusCode != 204) {  // ✅ Accept 204 No Content
-        String errorMessage;
-        try {
-          final errorBody = jsonDecode(res.body);
-          errorMessage = errorBody['message'] ??
-              'Update profile failed (${res.statusCode})';
-        } catch (_) {
-          errorMessage =
-              'Update profile failed (${res.statusCode}): ${res.body}';
-        }
-
-        throw Exception(errorMessage);
+      if (res.statusCode != 200 && res.statusCode != 204) {
+        throw Exception('Update profile failed (${res.statusCode})');
       }
     } catch (e) {
-      debugPrint('Profile update error: $e');
-      if (e is Exception) {
-        rethrow;
-      }
-      throw Exception('Network error: ${e.toString()}');
+      debugPrint('❌ UpdateProfile error: $e');
+      rethrow;
     }
   }
 
   /// ─── PROFILE: PUT /Profile/password ─────────────────────────────
-  /// ✅ CHANGED: /profile/password/update → /Profile/password + POST → PUT
   Future<void> updatePassword(UpdatePasswordModel dto) async {
-    final uri = Uri.parse('$_baseUrl/Profile/password');  // ✅ Changed endpoint
+    final uri = Uri.parse('$_baseUrl/Profile/password');
     
-    final res = await _client.put(  // ✅ Changed from post to put
-      uri,
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(dto.toJson()),
-    );
+    final res = await _client
+        .put(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode(dto.toJson()),
+        )
+        .timeout(const Duration(seconds: 30));
     
     if (res.statusCode != 200 && res.statusCode != 204) {
-      throw Exception(
-          'Password update failed (${res.statusCode}): ${res.body}');
+      throw Exception('Password update failed (${res.statusCode})');
     }
   }
 
   /// ─── VEHICLE: POST /Vehicles ─────────────────────────────────
-  /// ✅ CHANGED: /vehicle/add → /Vehicles
   Future<void> addVehicle(VehicleModel dto) async {
-    final uri = Uri.parse('$_baseUrl/Vehicles');  // ✅ Changed endpoint
+    final uri = Uri.parse('$_baseUrl/Vehicles');
 
-    debugPrint('Adding vehicle: ${jsonEncode(dto.toJson())}');
+    final res = await _client
+        .post(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode(dto.toJson()),
+        )
+        .timeout(const Duration(seconds: 30));
 
-    final res = await _client.post(
-      uri,
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(dto.toJson()),
-    );
-
-    debugPrint('Add vehicle response: ${res.statusCode}');
     if (res.statusCode != 200 && res.statusCode != 201) {
-      debugPrint('Add vehicle error body: ${res.body}');
-      throw Exception('Add vehicle failed (${res.statusCode}): ${res.body}');
+      String errorMessage = 'Failed to add vehicle';
+      try {
+        final errorBody = jsonDecode(res.body);
+        errorMessage = errorBody['message'] ?? errorBody['Message'] ?? errorMessage;
+      } catch (_) {}
+      throw Exception(errorMessage);
     }
   }
 
-  /// ─── VEHICLE: GET /Vehicles/user/me ─────────────────────────────────────
-  /// ✅ CHANGED: /vehicle → /Vehicles/user/me
+  /// ─── VEHICLE: GET /Vehicles ─────────────────────────────────────
   Future<List<VehicleModel>> getVehicles() async {
     final uri = Uri.parse('$_baseUrl/Vehicles');
+    debugPrint('📤 GetVehicles request to: $uri');
 
-    debugPrint('Fetching vehicles from: $uri');
+    try {
+      final res = await _client.get(uri).timeout(const Duration(seconds: 30));
+      debugPrint('📥 GetVehicles response: ${res.statusCode}');
 
-    final res = await _client.get(uri);
-
-    debugPrint('Get vehicles response status: ${res.statusCode}');
-    debugPrint('Get vehicles response body: ${res.body}');
-
-    if (res.statusCode == 200) {
-      final List<dynamic> data = jsonDecode(res.body);
-      debugPrint('Received ${data.length} vehicles');
-      return data.map((json) => VehicleModel.fromJson(json)).toList();
-    } else {
-      throw Exception('Failed to fetch vehicles (${res.statusCode})');
+      if (res.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(res.body);
+        return data.map((json) => VehicleModel.fromJson(json)).toList();
+      } else if (res.statusCode == 404) {
+        return [];
+      } else {
+        throw Exception('Failed to fetch vehicles (${res.statusCode})');
+      }
+    } catch (e) {
+      debugPrint('❌ GetVehicles error: $e');
+      rethrow;
     }
   }
 
   /// ─── GUEST: POST /Guests ─────────────────────────────────
-  /// ✅ CHANGED: /guest/register → /Guests + qrCodeImage → qrCode
   Future<String> registerGuest(AddGuestModel dto) async {
-    final uri = Uri.parse('$_baseUrl/Guests');  // ✅ Changed endpoint
+    final uri = Uri.parse('$_baseUrl/Guests');
 
-    debugPrint('Registering guest: ${jsonEncode(dto.toJson())}');
+    final res = await _client
+        .post(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode(dto.toJson()),
+        )
+        .timeout(const Duration(seconds: 30));
 
-    final res = await _client.post(
-      uri,
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(dto.toJson()),
-    );
-
-    debugPrint('Register guest response: ${res.statusCode}');
     if (res.statusCode == 200 || res.statusCode == 201) {
       final Map<String, dynamic> responseData = jsonDecode(res.body);
-      return responseData['qrCode'] ?? '';  // ✅ Changed from qrCodeImage to qrCode
+      return responseData['qrCode'] ?? '';
     } else {
-      debugPrint('Register guest error body: ${res.body}');
-      throw Exception('Register guest failed (${res.statusCode}): ${res.body}');
+      String errorMessage = 'Failed to register guest';
+      try {
+        final errorBody = jsonDecode(res.body);
+        errorMessage = errorBody['message'] ?? errorBody['Message'] ?? errorMessage;
+      } catch (_) {}
+      throw Exception(errorMessage);
     }
   }
 
-  /// ─── GUEST: GET /Guests/user/me ─────────────────────────────────────────
-  /// ✅ CHANGED: /Guest/guest/mine → /Guests/user/me
+  /// ─── GUEST: GET /Guests/user/me ─────────────────────────────────
   Future<List<GuestModel>> getGuests() async {
-    final uri = Uri.parse('$_baseUrl/Guests/user/me');  // ✅ Changed endpoint
-    
-    final res = await _client.get(uri);
+    final uri = Uri.parse('$_baseUrl/Guests/user/me');
+    debugPrint('📤 GetGuests request to: $uri');
 
-    if (res.statusCode == 200) {
-      final List<dynamic> guestsJson = jsonDecode(res.body);
-      return guestsJson.map((json) => GuestModel.fromJson(json)).toList();
-    } else {
-      throw Exception('Fetch guests failed (${res.statusCode}): ${res.body}');
+    try {
+      final res = await _client.get(uri).timeout(const Duration(seconds: 30));
+      debugPrint('📥 GetGuests response: ${res.statusCode}');
+
+      if (res.statusCode == 200) {
+        final List<dynamic> guestsJson = jsonDecode(res.body);
+        return guestsJson.map((json) => GuestModel.fromJson(json)).toList();
+      } else if (res.statusCode == 404) {
+        return [];
+      } else {
+        return [];
+      }
+    } catch (e) {
+      debugPrint('❌ GetGuests error: $e');
+      return [];
     }
   }
 
-  /// ─── GUEST: POST /Guests/{guestId}/verify ─────────────────────────────────
-  /// ✅ CHANGED: /guest/verify → /Guests/{guestId}/verify (RESTful pattern)
+  /// ─── GUEST: POST /Guests/{guestId}/verify ─────────────────────
   Future<Map<String, dynamic>> verifyGuest(String guestId) async {
-    final uri = Uri.parse('$_baseUrl/Guests/$guestId/verify');  // ✅ Changed to RESTful pattern
+    final uri = Uri.parse('$_baseUrl/Guests/$guestId/verify');
 
-    final res = await _client.post(
-      uri,
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({}),  // Empty body for verification
-    );
+    final res = await _client
+        .post(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({}),
+        )
+        .timeout(const Duration(seconds: 30));
 
     if (res.statusCode == 200 || res.statusCode == 201) {
       return jsonDecode(res.body);
     } else {
-      throw Exception('Verify guest failed (${res.statusCode}): ${res.body}');
-    }
-  }
-
-  /// ─── AUTH: POST /otps/send ────────────────────────────────
-  /// ✅ CHANGED: /auth/otp/send → /otps/send
-  Future<void> sendOtp(String email) async {
-    final uri = Uri.parse('$_baseUrl/otps/send');  // ✅ Changed endpoint
-    
-    final body = jsonEncode({'email': email});
-    debugPrint('Sending OTP request to: $uri');
-    debugPrint('Request body: $body');
-    
-    final res = await http.post(
-      uri,
-      headers: {'Content-Type': 'application/json'},
-      body: body,
-    );
-    
-    debugPrint('Send OTP response status: ${res.statusCode}');
-    if (res.statusCode == 200 || res.statusCode == 201) {
-      debugPrint('OTP sent successfully');
-      return;
-    } else {
-      String errorMessage;
-      try {
-        final errorBody = jsonDecode(res.body);
-        errorMessage =
-            errorBody['message'] ?? 'Send OTP failed (${res.statusCode})';
-      } catch (_) {
-        errorMessage = 'Send OTP failed (${res.statusCode}): ${res.body}';
-      }
-      throw Exception(errorMessage);
-    }
-  }
-
-  /// ─── AUTH: POST /otps/verify ───────────────────────────────
-  /// ✅ CHANGED: /auth/otp/verify → /otps/verify
-  Future<void> verifyOtp(String email, String otp) async {
-    final uri = Uri.parse('$_baseUrl/otps/verify');  // ✅ Changed endpoint
-    
-    final body = jsonEncode({'email': email, 'otp': otp});
-    debugPrint('Verifying OTP at: $uri');
-    debugPrint('Request body: $body');
-    
-    final res = await http.post(
-      uri,
-      headers: {'Content-Type': 'application/json'},
-      body: body,
-    );
-    
-    debugPrint('Verify OTP response status: ${res.statusCode}');
-    if (res.statusCode == 200 || res.statusCode == 201) {
-      debugPrint('OTP verified successfully');
-      return;
-    } else {
-      String errorMessage;
-      try {
-        final errorBody = jsonDecode(res.body);
-        errorMessage =
-            errorBody['message'] ?? 'Verify OTP failed (${res.statusCode})';
-      } catch (_) {
-        errorMessage = 'Verify OTP failed (${res.statusCode}): ${res.body}';
-      }
-      throw Exception(errorMessage);
-    }
-  }
-
-  /// ─── AUTH: POST /otps/resend ───────────────────────────────
-  /// ✅ CHANGED: /auth/resend-otp → /otps/resend
-  Future<void> resendOtp(String email) async {
-    final uri = Uri.parse('$_baseUrl/otps/resend');  // ✅ Changed endpoint
-    
-    final body = jsonEncode({'email': email});
-    debugPrint('Resending OTP request to: $uri');
-    debugPrint('Request body: $body');
-    
-    final res = await http.post(
-      uri,
-      headers: {'Content-Type': 'application/json'},
-      body: body,
-    );
-    
-    debugPrint('Resend OTP response status: ${res.statusCode}');
-    if (res.statusCode == 200 || res.statusCode == 201) {
-      return;
-    } else {
-      String errorMessage;
-      try {
-        final errorBody = jsonDecode(res.body);
-        errorMessage =
-            errorBody['message'] ?? 'Resend OTP failed (${res.statusCode})';
-      } catch (_) {
-        errorMessage = 'Resend OTP failed (${res.statusCode}): ${res.body}';
-      }
-      throw Exception(errorMessage);
+      throw Exception('Verify guest failed (${res.statusCode})');
     }
   }
 
@@ -513,18 +480,23 @@ class ApiService {
   /// Get all user residences
   Future<List<ResidenceModel>> getResidences() async {
     final uri = Uri.parse('$_baseUrl/Profile/residences');
-    
-    debugPrint('Fetching residences from: $uri');
-    
-    final res = await _client.get(uri);
-    debugPrint('Get residences response status: ${res.statusCode}');
-    
-    if (res.statusCode == 200) {
-      final List<dynamic> data = jsonDecode(res.body);
-      debugPrint('Received ${data.length} residences');
-      return data.map((json) => ResidenceModel.fromJson(json)).toList();
-    } else {
-      throw Exception('Failed to fetch residences (${res.statusCode})');
+    debugPrint('📤 GetResidences request to: $uri');
+
+    try {
+      final res = await _client.get(uri).timeout(const Duration(seconds: 30));
+      debugPrint('📥 GetResidences response: ${res.statusCode}');
+
+      if (res.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(res.body);
+        return data.map((json) => ResidenceModel.fromJson(json)).toList();
+      } else if (res.statusCode == 404) {
+        return [];
+      } else {
+        return [];
+      }
+    } catch (e) {
+      debugPrint('❌ GetResidences error: $e');
+      return [];
     }
   }
 
@@ -532,7 +504,7 @@ class ApiService {
   Future<ResidenceModel> getResidenceDetails(String residenceId) async {
     final uri = Uri.parse('$_baseUrl/Profile/residences/$residenceId');
     
-    final res = await _client.get(uri);
+    final res = await _client.get(uri).timeout(const Duration(seconds: 30));
     
     if (res.statusCode == 200) {
       return ResidenceModel.fromJson(jsonDecode(res.body));
@@ -545,13 +517,13 @@ class ApiService {
   Future<void> addResidence(AddResidenceDto dto) async {
     final uri = Uri.parse('$_baseUrl/Profile/add-residence');
     
-    debugPrint('Adding residence: ${dto.toJson()}');
-    
-    final res = await _client.post(
-      uri,
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(dto.toJson()),
-    );
+    final res = await _client
+        .post(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode(dto.toJson()),
+        )
+        .timeout(const Duration(seconds: 30));
     
     if (res.statusCode != 200 && res.statusCode != 201) {
       final error = jsonDecode(res.body)['message'] ?? 'Failed to add residence';
@@ -563,7 +535,7 @@ class ApiService {
   Future<void> setPrimaryResidence(String residenceId) async {
     final uri = Uri.parse('$_baseUrl/Profile/residences/$residenceId/set-primary');
     
-    final res = await _client.patch(uri);
+    final res = await _client.patch(uri).timeout(const Duration(seconds: 30));
     
     if (res.statusCode != 200) {
       final error = jsonDecode(res.body)['message'] ?? 'Failed to set primary residence';
@@ -575,7 +547,7 @@ class ApiService {
   Future<void> deleteResidence(String residenceId) async {
     final uri = Uri.parse('$_baseUrl/Profile/residences/$residenceId');
     
-    final res = await _client.delete(uri);
+    final res = await _client.delete(uri).timeout(const Duration(seconds: 30));
     
     if (res.statusCode != 200) {
       final error = jsonDecode(res.body)['message'] ?? 'Failed to delete residence';
@@ -587,13 +559,18 @@ class ApiService {
   Future<List<GuestModel>> getGuestsByResidence(String residenceId) async {
     final uri = Uri.parse('$_baseUrl/Guests/residence/$residenceId');
     
-    final res = await _client.get(uri);
-    
-    if (res.statusCode == 200) {
-      final List<dynamic> data = jsonDecode(res.body);
-      return data.map((json) => GuestModel.fromJson(json)).toList();
-    } else {
-      throw Exception('Failed to fetch guests (${res.statusCode})');
+    try {
+      final res = await _client.get(uri).timeout(const Duration(seconds: 30));
+      
+      if (res.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(res.body);
+        return data.map((json) => GuestModel.fromJson(json)).toList();
+      } else {
+        return [];
+      }
+    } catch (e) {
+      debugPrint('❌ GetGuestsByResidence error: $e');
+      return [];
     }
   }
 
@@ -601,13 +578,18 @@ class ApiService {
   Future<List<VehicleModel>> getVehiclesByResidence(String residenceId) async {
     final uri = Uri.parse('$_baseUrl/Vehicles/residence/$residenceId');
     
-    final res = await _client.get(uri);
-    
-    if (res.statusCode == 200) {
-      final List<dynamic> data = jsonDecode(res.body);
-      return data.map((json) => VehicleModel.fromJson(json)).toList();
-    } else {
-      throw Exception('Failed to fetch vehicles (${res.statusCode})');
+    try {
+      final res = await _client.get(uri).timeout(const Duration(seconds: 30));
+      
+      if (res.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(res.body);
+        return data.map((json) => VehicleModel.fromJson(json)).toList();
+      } else {
+        return [];
+      }
+    } catch (e) {
+      debugPrint('❌ GetVehiclesByResidence error: $e');
+      return [];
     }
   }
 }
