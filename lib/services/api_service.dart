@@ -32,7 +32,7 @@ class ApiService {
   String get _baseUrl {
     if (kIsWeb) {
       return 'http://localhost:5280/api';
-    }
+    } 
     // ✅ Works for BOTH emulator AND physical device (after adb reverse)
     return 'http://localhost:5280/api';
   }
@@ -72,6 +72,7 @@ class ApiService {
       debugPrint('📥 Signup response body: ${res.body}');
 
       if (res.statusCode == 200 || res.statusCode == 201) {
+        sendOtp(dto.email);  // Automatically send OTP after signup
         return;
       } else {
         String errorMessage = 'Signup failed';
@@ -186,6 +187,7 @@ class ApiService {
   Future<void> sendOtp(String email) async {
     final uri = Uri.parse('$_baseUrl/Auth/send-otp');
     debugPrint('📤 SendOtp request to: $uri');
+    debugPrint('📥 SendOtp to email: $email');
 
     try {
       final res = await _publicClient

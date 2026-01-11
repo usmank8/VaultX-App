@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:async';
 import '../services/api_service.dart';
 
 class OtpScreen extends StatefulWidget {
@@ -16,9 +17,17 @@ class _OtpScreenState extends State<OtpScreen> {
       List.generate(6, (_) => TextEditingController());
   final List<FocusNode> _focusNodes = List.generate(6, (_) => FocusNode());
   bool _isSending = false;
-  bool _isOTPSent = false;
   bool _isVerifying = false;
   bool _isResending = false;
+  Timer? _resendTimer;
+  int _resendCountdown = 120;
+  bool _canResend = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // WidgetsBinding.instance.addPostFrameCallback((_) => _sendOtp());
+  }
 
   @override
   void dispose() {
@@ -28,16 +37,32 @@ class _OtpScreenState extends State<OtpScreen> {
     for (final f in _focusNodes) {
       f.dispose();
     }
+    _resendTimer?.cancel();
     super.dispose();
   }
 
   String get _otpCode => _otpControllers.map((c) => c.text).join();
 
+  void _startResendTimer() {
+    _canResend = false;
+    _resendCountdown = 120;
+    _resendTimer?.cancel();
+    _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      setState(() {
+        _resendCountdown--;
+        if (_resendCountdown <= 0) {
+          _canResend = true;
+          timer.cancel();
+        }
+      });
+    });
+  }
+
   Future<void> _sendOtp() async {
     setState(() => _isSending = true);
     try {
       await _api.sendOtp(widget.email);
-      setState(() => _isOTPSent = true);
+      _startResendTimer();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
             content: Text('OTP sent to your email'),
@@ -85,6 +110,7 @@ class _OtpScreenState extends State<OtpScreen> {
     setState(() => _isResending = true);
     try {
       await _api.resendOtp(widget.email);
+      _startResendTimer();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
             content: Text('OTP resent'), backgroundColor: Color(0xFF7D2828)),
@@ -131,78 +157,65 @@ class _OtpScreenState extends State<OtpScreen> {
                   ),
                 ),
                 const SizedBox(height: 20),
-                Text(
-                  _isOTPSent
-                      ? 'Enter the 6-digit OTP sent to your email'
-                      : 'Send an OTP to your email to continue',
+                const Text(
+                  'Enter the 6-digit OTP sent to your email',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 16,
-                    color: Colors.grey[600],
+                    color: Colors.grey,
                   ),
                 ),
                 const SizedBox(height: 40),
-                if (!_isOTPSent)
-                  ElevatedButton(
-                    onPressed: _isSending ? null : _sendOtp,
-                    child: _isSending
-                        ? const CircularProgressIndicator(color: Colors.white)
-                        : const Text('Send OTP'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFD5A3A3),
-                      minimumSize: const Size(double.infinity, 55),
-                    ),
-                  )
-                else ...[
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: List.generate(6, (i) {
-                      return SizedBox(
-                        width: 45,
-                        child: TextField(
-                          controller: _otpControllers[i],
-                          focusNode: _focusNodes[i],
-                          keyboardType: TextInputType.number,
-                          textAlign: TextAlign.center,
-                          maxLength: 1,
-                          style: const TextStyle(
-                              fontSize: 24, fontWeight: FontWeight.bold),
-                          decoration: const InputDecoration(
-                            counterText: "",
-                            border: OutlineInputBorder(),
-                          ),
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly
-                          ],
-                          onChanged: (val) {
-                            if (val.isNotEmpty && i < 5) {
-                              _focusNodes[i + 1].requestFocus();
-                            } else if (val.isEmpty && i > 0) {
-                              _focusNodes[i - 1].requestFocus();
-                            }
-                          },
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: List.generate(6, (i) {
+                    return SizedBox(
+                      width: 45,
+                      child: TextField(
+                        controller: _otpControllers[i],
+                        focusNode: _focusNodes[i],
+                        keyboardType: TextInputType.number,
+                        textAlign: TextAlign.center,
+                        maxLength: 1,
+                        style: const TextStyle(
+                            fontSize: 24, fontWeight: FontWeight.bold),
+                        decoration: const InputDecoration(
+                          counterText: "",
+                          border: OutlineInputBorder(),
                         ),
-                      );
-                    }),
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly
+                        ],
+                        onChanged: (val) {
+                          if (val.isNotEmpty && i < 5) {
+                            _focusNodes[i + 1].requestFocus();
+                          } else if (val.isEmpty && i > 0) {
+                            _focusNodes[i - 1].requestFocus();
+                          }
+                        },
+                      ),
+                    );
+                  }),
+                ),
+                const SizedBox(height: 20),
+                ElevatedButton(
+                  onPressed: _isVerifying ? null : _verifyOtp,
+                  child: _isVerifying
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : const Text('Verify OTP'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF7D2828),
+                    minimumSize: const Size(double.infinity, 55),
                   ),
-                  const SizedBox(height: 20),
-                  ElevatedButton(
-                    onPressed: _isVerifying ? null : _verifyOtp,
-                    child: _isVerifying
-                        ? const CircularProgressIndicator(color: Colors.white)
-                        : const Text('Verify OTP'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF7D2828),
-                      minimumSize: const Size(double.infinity, 55),
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: _isResending ? null : _resendOtp,
-                    child: _isResending
-                        ? const CircularProgressIndicator()
-                        : const Text('Resend OTP'),
-                  ),
-                ],
+                ),
+                TextButton(
+                  onPressed: _canResend ? _resendOtp : null,
+                  child: _isResending
+                      ? const CircularProgressIndicator()
+                      : _canResend
+                          ? const Text('Resend OTP')
+                          : Text('Resend in ${_resendCountdown}s'),
+                ),
                 const SizedBox(height: 40),
               ],
             ),

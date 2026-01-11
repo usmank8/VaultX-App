@@ -57,15 +57,13 @@ class CreateProfileModel {
       if (userid != null) 'userid': userid,
       'firstname': firstname,
       'lastname': lastname,
-      'phone': phone,
+      'phonenumber': phone,
       'cnic': cnic,
       'email': email,
-      'residence': {
-        'addressLine1': address,
-        'block': block,
-        'residence': residence,
-        'residenceType': residenceType,
-      },
+      'address': address,
+      'block': block,
+      'residence': residence,
+      'residenceType': residenceType,
     };
   }
 }

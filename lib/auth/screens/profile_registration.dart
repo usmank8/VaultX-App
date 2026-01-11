@@ -267,8 +267,8 @@ class _ProfileRegistrationPageState extends State<ProfileRegistrationPage> {
           dto.address.isNotEmpty &&
           dto.block.isNotEmpty &&
           dto.residence.isNotEmpty &&
-          dto.residenceType.isNotEmpty &&
-          dto.email.isNotEmpty;
+          dto.residenceType.isNotEmpty;
+          // dto.email.isNotEmpty;
 
       if (allFieldsFilled) {
         // Show success message
