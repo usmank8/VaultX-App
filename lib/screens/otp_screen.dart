@@ -13,8 +13,7 @@ class OtpScreen extends StatefulWidget {
 
 class _OtpScreenState extends State<OtpScreen> {
   final ApiService _api = ApiService();
-  final List<TextEditingController> _otpControllers =
-      List.generate(6, (_) => TextEditingController());
+  final List<TextEditingController> _otpControllers = List.generate(6, (_) => TextEditingController());
   final List<FocusNode> _focusNodes = List.generate(6, (_) => FocusNode());
   bool _isSending = false;
   bool _isVerifying = false;

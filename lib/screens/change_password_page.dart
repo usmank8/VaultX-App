@@ -155,6 +155,9 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                   if (value.length < 8) {
                     return 'Password must be at least 8 characters';
                   }
+                  if (!RegExp(r'(?=.*[!@#\$%^&*])').hasMatch(value)) {
+                    return "Password must contain at least one special character";
+                  }
                   return null;
                 },
               ),

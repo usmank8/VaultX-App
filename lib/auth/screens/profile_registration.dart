@@ -293,7 +293,7 @@ class _ProfileRegistrationPageState extends State<ProfileRegistrationPage> {
         );
       } else {
         setState(() {
-          _error = 'Please fill all required fields.';
+          _error = 'All fields are required, please fill all fields.';
         });
       }
     } catch (e) {
@@ -507,5 +507,7 @@ class _ProfileRegistrationPageState extends State<ProfileRegistrationPage> {
                 },
               ),
             ),
-          ]));
+          ]
+        )
+      );
 }

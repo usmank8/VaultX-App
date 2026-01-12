@@ -39,8 +39,13 @@ class _SignUpPageState extends State<SignUpPage> {
       return;
     }
 
-    if (_passCtrl.text.length < 6) {
-      setState(() => _error = "Password must be at least 6 characters");
+    if (_passCtrl.text.length < 8) {
+      setState(() => _error = "Password must be at least 8 characters");
+      return;
+    }
+
+    if (!RegExp(r'(?=.*[!@#\$%^&*])').hasMatch(_passCtrl.text)) {
+      setState(() => _error = "Password must contain at least one special character");
       return;
     }
 
@@ -171,7 +176,7 @@ class _SignUpPageState extends State<SignUpPage> {
                       decoration: InputDecoration(
                         filled: true,
                         fillColor: const Color(0xFFFFF1ED),
-                        hintText: "Enter password (min 6 characters)",
+                        hintText: "Enter password (min 8 characters)",
                         prefixIcon:
                             const Icon(Icons.lock_outline, color: Colors.red),
                         suffixIcon: IconButton(
