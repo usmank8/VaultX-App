@@ -410,9 +410,9 @@ class ApiService {
     }
   }
 
-  /// ─── GUEST: POST /Guests ─────────────────────────────────
+  /// ─── GUEST: POST /Guests/register ─────────────────────────────────
   Future<String> registerGuest(AddGuestModel dto) async {
-    final uri = Uri.parse('$_baseUrl/Guests');
+    final uri = Uri.parse('$_baseUrl/Guests/register');
 
     final res = await _client
         .post(
@@ -435,9 +435,9 @@ class ApiService {
     }
   }
 
-  /// ─── GUEST: GET /Guests/user/me ─────────────────────────────────
+  /// ─── GUEST: GET /Guests/my-guests ─────────────────────────────────
   Future<List<GuestModel>> getGuests() async {
-    final uri = Uri.parse('$_baseUrl/Guests/user/me');
+    final uri = Uri.parse('$_baseUrl/Guests/my-guests');
     debugPrint('📤 GetGuests request to: $uri');
 
     try {
@@ -445,7 +445,9 @@ class ApiService {
       debugPrint('📥 GetGuests response: ${res.statusCode}');
 
       if (res.statusCode == 200) {
-        final List<dynamic> guestsJson = jsonDecode(res.body);
+        // API returns a wrapped object with guests array inside
+        final Map<String, dynamic> responseData = jsonDecode(res.body);
+        final List<dynamic> guestsJson = responseData['guests'] as List<dynamic>? ?? [];
         return guestsJson.map((json) => GuestModel.fromJson(json)).toList();
       } else if (res.statusCode == 404) {
         return [];

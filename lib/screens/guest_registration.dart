@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:vaultx_solution/loading/loading.dart';
 import 'package:vaultx_solution/models/guest_model.dart';
+import 'package:vaultx_solution/models/residence_model.dart';
 import 'package:vaultx_solution/screens/guest_registration_confirmed.dart';
 import 'package:vaultx_solution/screens/guest_vehicle_registration.dart';
 import 'package:vaultx_solution/services/api_service.dart';
@@ -34,11 +35,16 @@ class _GuestRegistrationFormState extends State<GuestRegistrationForm> {
   // Vehicle information
   GuestVehicleModel? _guestVehicle;
 
+  // Residence information
+  List<ResidenceModel> _residences = [];
+  String? _selectedResidenceId;
+
   @override
   void initState() {
     super.initState();
     // Initialize the date time controller with formatted current date and time
     dateTimeController.text = DateFormat('MMM dd, yyyy - hh:mm a').format(_selectedDateTime);
+    _fetchResidences();
   }
 
   @override
@@ -47,6 +53,24 @@ class _GuestRegistrationFormState extends State<GuestRegistrationForm> {
     contactController.dispose();
     dateTimeController.dispose();
     super.dispose();
+  }
+
+  Future<void> _fetchResidences() async {
+    try {
+      final residences = await _apiService.getResidences();
+      final primaryResidence = residences.firstWhere(
+        (r) => r.isPrimary,
+        orElse: () => residences.isNotEmpty ? residences.first : throw Exception('No residences found'),
+      );
+      setState(() {
+        _residences = residences;
+        _selectedResidenceId = primaryResidence.id;
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Failed to load primary residence: $e';
+      });
+    }
   }
 
   Future<void> _selectDateTime() async {
@@ -96,6 +120,13 @@ class _GuestRegistrationFormState extends State<GuestRegistrationForm> {
   Future<void> _registerGuest() async {
     if (!_formKey.currentState!.validate()) return;
 
+    if (_selectedResidenceId == null) {
+      setState(() {
+        _errorMessage = 'Please select a residence';
+      });
+      return;
+    }
+
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -109,6 +140,8 @@ class _GuestRegistrationFormState extends State<GuestRegistrationForm> {
         eta: _selectedDateTime.toIso8601String(),
         visitCompleted: false,
         vehicle: _hasVehicle ? _guestVehicle : null,
+        residenceId: _selectedResidenceId,
+        gender: _selectedGender,
       );
 
       // Register guest and get QR code
@@ -263,7 +296,7 @@ class _GuestRegistrationFormState extends State<GuestRegistrationForm> {
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: DropdownButtonFormField<String>(
-                        value: _selectedGender,
+                        initialValue: _selectedGender,
                         decoration: InputDecoration(
                           border: InputBorder.none,
                         ),

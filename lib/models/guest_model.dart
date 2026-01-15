@@ -121,6 +121,8 @@ class AddGuestModel {
   final String eta;
   final bool? visitCompleted;
   final GuestVehicleModel? vehicle;
+  final String? residenceId;
+  final String? gender;
 
   AddGuestModel({
     required this.guestName,
@@ -128,6 +130,8 @@ class AddGuestModel {
     required this.eta,
     this.visitCompleted,
     this.vehicle,
+    this.residenceId,
+    this.gender,
   });
 
   Map<String, dynamic> toJson() {
@@ -143,6 +147,14 @@ class AddGuestModel {
 
     if (vehicle != null) {
       data['vehicle'] = vehicle!.toJson();
+    }
+
+    if (residenceId != null) {
+      data['residenceId'] = residenceId;
+    }
+
+    if (gender != null) {
+      data['gender'] = gender;
     }
 
     return data;
