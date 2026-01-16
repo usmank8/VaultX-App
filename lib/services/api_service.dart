@@ -332,7 +332,7 @@ class ApiService {
 
     try {
       final res = await _client
-          .put(
+          .patch(
             uri,
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode(dto.toJson()),
@@ -348,12 +348,12 @@ class ApiService {
     }
   }
 
-  /// ─── PROFILE: PUT /Profile/password ─────────────────────────────
+  /// ─── PROFILE: PUT /Profile/password/update ─────────────────────────────
   Future<void> updatePassword(UpdatePasswordModel dto) async {
-    final uri = Uri.parse('$_baseUrl/Profile/password');
+    final uri = Uri.parse('$_baseUrl/Profile/password/update');
     
     final res = await _client
-        .put(
+        .post(
           uri,
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode(dto.toJson()),

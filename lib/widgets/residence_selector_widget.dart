@@ -152,7 +152,7 @@ class _ResidenceSelectorWidgetState extends State<ResidenceSelectorWidget> {
                           ),
                         if (_selectedResidence!.isPrimary) const SizedBox(width: 6),
                         Text(
-                          '${_selectedResidence!.guestCount ?? 0} Guests · ${_selectedResidence!.vehicleCount ?? 0} Vehicles',
+                          '${_selectedResidence?.guestCount ?? 0} Guests - ${_selectedResidence?.vehicleCount ?? 0} Vehicles',
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.grey.shade600,

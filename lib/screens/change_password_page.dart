@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:vaultx_solution/loading/loading.dart';
+import 'package:vaultx_solution/models/create_profile_model.dart';
 import 'package:vaultx_solution/models/update_password_model.dart';
 import 'package:vaultx_solution/services/api_service.dart';
 import 'package:vaultx_solution/widgets/custom_app_bar.dart';
@@ -24,6 +25,13 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   String? _errorMessage;
   
   final ApiService _apiService = ApiService();
+  CreateProfileModel? _profile;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
 
   @override
   void dispose() {
@@ -31,6 +39,19 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
     _newPasswordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadProfile() async {
+    try {
+      final profile = await _apiService.getProfile();
+      if (mounted) {
+        setState(() {
+          _profile = profile;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading profile: $e');
+    }
   }
 
   Future<void> _updatePassword() async {
@@ -89,6 +110,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
         child: CustomAppBar(
           showBackButton: true,
           actions: [],
+          userProfile: _profile,
         ),
       ),
       body: SingleChildScrollView(
@@ -130,9 +152,9 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                   if (value == null || value.isEmpty) {
                     return 'Please enter your current password';
                   }
-                  if (value.length < 8) {
-                    return 'Password must be at least 8 characters';
-                  }
+                  // if (value.length < 8) {
+                  //   return 'Password must be at least 8 characters';
+                  // }
                   return null;
                 },
               ),
@@ -155,7 +177,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                   if (value.length < 8) {
                     return 'Password must be at least 8 characters';
                   }
-                  if (!RegExp(r'(?=.*[!@#\$%^&*])').hasMatch(value)) {
+                  if (!RegExp(r'(?=.*[!@#\$%^&*._])').hasMatch(value)) {
                     return "Password must contain at least one special character";
                   }
                   return null;
