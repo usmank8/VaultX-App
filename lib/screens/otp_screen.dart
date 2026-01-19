@@ -27,7 +27,7 @@ class _OtpScreenState extends State<OtpScreen> {
   @override
   void initState() {
     super.initState();
-    // WidgetsBinding.instance.addPostFrameCallback((_) => _sendOtp());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _sendOtp());
   }
 
   @override
@@ -46,7 +46,7 @@ class _OtpScreenState extends State<OtpScreen> {
 
   void _startResendTimer() {
     _canResend = false;
-    _resendCountdown = 120;
+    _resendCountdown = 60;
     _resendTimer?.cancel();
     _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       setState(() {
