@@ -535,6 +535,35 @@ class ApiService {
     }
   }
 
+  /// Add secondary residence
+  Future<void> addSecondaryResidence(AddSecondaryResidenceDto dto) async {
+    final uri = Uri.parse('$_baseUrl/Residences');
+    debugPrint('📤 AddSecondaryResidence request to: $uri');
+    debugPrint('📤 AddSecondaryResidence body: ${jsonEncode(dto.toJson())}');
+    
+    final res = await _client
+        .post(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode(dto.toJson()),
+        )
+        .timeout(const Duration(seconds: 30));
+    
+    debugPrint('📥 AddSecondaryResidence response status: ${res.statusCode}');
+    debugPrint('📥 AddSecondaryResidence response body: ${res.body}');
+    
+    if (res.statusCode != 200 && res.statusCode != 201) {
+      String errorMessage = 'Failed to add secondary residence';
+      try {
+        final errorBody = jsonDecode(res.body);
+        errorMessage = errorBody['message'] ?? errorBody['Message'] ?? 'Failed to add secondary residence (${res.statusCode})';
+      } catch (_) {
+        errorMessage = 'Failed to add secondary residence (${res.statusCode}): ${res.body}';
+      }
+      throw Exception(errorMessage);
+    }
+  }
+
   /// Set residence as primary
   Future<void> setPrimaryResidence(String residenceId) async {
     final uri = Uri.parse('$_baseUrl/Profile/residences/$residenceId/set-primary');

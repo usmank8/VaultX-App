@@ -5,6 +5,7 @@ import 'package:vaultx_solution/loading/loading.dart';
 import 'package:vaultx_solution/screens/guest_registration.dart';
 import 'package:vaultx_solution/screens/guest_registration_confirmed.dart';
 import 'package:vaultx_solution/screens/vehicle_registration.dart';
+import 'package:vaultx_solution/screens/residence_registration.dart';
 import 'package:vaultx_solution/screens/otp_screen.dart';
 import 'package:vaultx_solution/screens/all_guests_screen.dart';
 import 'package:vaultx_solution/screens/all_vehicles_screen.dart';
@@ -144,7 +145,21 @@ class _DashboardPageState extends State<DashboardPage> {
         preferredSize: Size.fromHeight(70),
         child: CustomAppBar(
           showBackButton: false,
-          actions: [],
+          actions: [
+            IconButton(
+              icon: Icon(Icons.add_home, color: Colors.black),
+              onPressed: () async {
+                final result = await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ResidenceRegistrationPage()),
+                );
+                if (result == true) {
+                  _loadData(); // Refresh data after adding residence
+                }
+              },
+              tooltip: 'Add Secondary Residence',
+            ),
+          ],
           userProfile: _profile,
           onRefresh: _loadData,
           unreadNotifications: 0,
@@ -152,91 +167,124 @@ class _DashboardPageState extends State<DashboardPage> {
       ),
       backgroundColor: const Color(0xFFF5F5F5),
       body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: _loadData,
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Residence Selector
-                ResidenceSelectorWidget(
-                  onResidenceChanged: _onResidenceChanged,
+        child: _selectedResidence?.isApproved == false
+            ? Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    ResidenceSelectorWidget(
+                      onResidenceChanged: _onResidenceChanged,
+                    ),
+                    const SizedBox(height: 16),
+                    Card(
+                      color: Colors.orange.shade50,
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          children: [
+                            Icon(Icons.hourglass_empty, size: 48, color: Colors.orange),
+                            const SizedBox(height: 16),
+                            const Text(
+                              'Residence Pending Approval',
+                              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Your residence is waiting for admin approval. You cannot register guests or vehicles until it is approved.',
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-
-                const SizedBox(height: 16),
-
-                // Quick Actions
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+              )
+            : RefreshIndicator(
+                onRefresh: _loadData,
+                child: SingleChildScrollView(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Quick Actions',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
+                      // Residence Selector
+                      ResidenceSelectorWidget(
+                        onResidenceChanged: _onResidenceChanged,
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // Quick Actions
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Quick Actions',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _QuickActionCard(
+                                    icon: Icons.person_add,
+                                    label: 'Add Guest',
+                                    color: Colors.blue,
+                                    onTap: () async {
+                                      final result = await Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => const GuestRegistrationForm(),
+                                        ),
+                                      );
+                                      if (result == true) {
+                                        _loadData();
+                                      }
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: _QuickActionCard(
+                                    icon: Icons.directions_car,
+                                    label: 'Add Vehicle',
+                                    color: Colors.green,
+                                    onTap: () async {
+                                      // Check vehicle count for THIS residence
+                                      if (_residenceVehicles.length >= 4) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(
+                                            content: Text('Maximum 4 vehicles allowed per residence'),
+                                            backgroundColor: Colors.red,
+                                          ),
+                                        );
+                                        return;
+                                      }
+                                      final result = await Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => const VehicleRegistrationPage(),
+                                        ),
+                                      );
+                                      if (result == true) {
+                                        _loadData();
+                                      }
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _QuickActionCard(
-                              icon: Icons.person_add,
-                              label: 'Add Guest',
-                              color: Colors.blue,
-                              onTap: () async {
-                                final result = await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => const GuestRegistrationForm(),
-                                  ),
-                                );
-                                if (result == true) {
-                                  _loadData();
-                                }
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _QuickActionCard(
-                              icon: Icons.directions_car,
-                              label: 'Add Vehicle',
-                              color: Colors.green,
-                              onTap: () async {
-                                // Check vehicle count for THIS residence
-                                if (_residenceVehicles.length >= 4) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Maximum 4 vehicles allowed per residence'),
-                                      backgroundColor: Colors.red,
-                                    ),
-                                  );
-                                  return;
-                                }
-                                final result = await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => const VehicleRegistrationPage(),
-                                  ),
-                                );
-                                if (result == true) {
-                                  _loadData();
-                                }
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
 
-                const SizedBox(height: 24),
+                      const SizedBox(height: 24),
 
-                // Vehicles Section - USE _residenceVehicles
+                      // Vehicles Section - USE _residenceVehicles
                 _buildSectionHeader(
                   title: 'My Vehicles',
                   count: _residenceVehicles.length, // ✅ Use filtered count
