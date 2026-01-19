@@ -135,6 +135,10 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
                   if (value == null || value.isEmpty) {
                     return 'Please enter vehicle model';
                   }
+                  final year = int.tryParse(value);
+                  if (year == null || year < 1900 || year > 2026) {
+                    return 'Please enter a valid model year (1900-2026)';
+                  }
                   return null;
                 },
               ),
@@ -146,6 +150,10 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
                 validator: (value) {
                   if (value == null || value.isEmpty) {
                     return 'Please enter license plate number';
+                  }
+                  final regex = RegExp(r'^[A-Z]{2,}-[0-9]{1,5}$', caseSensitive: false);
+                  if (!regex.hasMatch(value)) {
+                    return 'Invalid license plate format. Use format like LIT-123';
                   }
                   return null;
                 },
@@ -164,17 +172,17 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
                 },
               ),
               
-              _buildInputField(
-                controller: _rfidTagController,
-                label: "RFID Tag ID",
-                hint: "Enter RFID tag ID",
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter RFID tag ID';
-                  }
-                  return null;
-                },
-              ),
+              // _buildInputField(
+              //   controller: _rfidTagController,
+              //   label: "RFID Tag ID",
+              //   hint: "Enter RFID tag ID",
+              //   validator: (value) {
+              //     if (value == null || value.isEmpty) {
+              //       return 'Please enter RFID tag ID';
+              //     }
+              //     return null;
+              //   },
+              // ),
               
               _buildInputField(
                 controller: _vehicleColorController,
