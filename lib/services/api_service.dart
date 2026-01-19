@@ -31,10 +31,10 @@ class ApiService {
   // Base URL
   String get _baseUrl {
     if (kIsWeb) {
-      return 'http://localhost:5280/api';
+      return 'https://vaultx-webapi-bpexg8gcb7efecer.eastasia-01.azurewebsites.net/api';
     } 
     // ✅ Works for BOTH emulator AND physical device (after adb reverse)
-    return 'http://localhost:5280/api';
+    return 'https://vaultx-webapi-bpexg8gcb7efecer.eastasia-01.azurewebsites.net/api';
   }
 
   // In-memory token
