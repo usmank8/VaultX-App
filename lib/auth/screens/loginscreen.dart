@@ -7,6 +7,7 @@ import 'package:vaultx_solution/auth/screens/profile_registration.dart';
 import 'package:vaultx_solution/auth/screens/registerscreen.dart';
 import 'package:vaultx_solution/screens/home_page.dart';
 import 'package:vaultx_solution/screens/pending_approval_screen.dart';
+import 'package:vaultx_solution/screens/forgot_password_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class LoginPage extends StatefulWidget {
@@ -337,6 +338,29 @@ class _LoginPageState extends State<LoginPage> {
                               : const Text("Login",
                                   style:
                                       TextStyle(fontWeight: FontWeight.bold)),
+                        ),
+
+                        const SizedBox(height: 16),
+
+                        // Forgot Password
+                        Center(
+                          child: TextButton(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const ForgotPasswordScreen(),
+                                ),
+                              );
+                            },
+                            child: const Text(
+                              "Forgot Password?",
+                              style: TextStyle(
+                                color: Colors.blue,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
                         ),
 
                         const SizedBox(height: 16),

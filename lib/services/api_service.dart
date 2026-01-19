@@ -263,6 +263,44 @@ class ApiService {
     await sendOtp(email);
   }
 
+  /// ─── PASSWORD: CHANGE ───────────────────────────────────────────
+  Future<void> changePassword(String email, String newPassword) async {
+    final uri = Uri.parse('$_baseUrl/Auth/change-password');
+    debugPrint('📤 ChangePassword request to: $uri');
+
+    try {
+      final res = await _publicClient
+          .post(
+            uri,
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: jsonEncode({
+              'email': email,
+              'newPassword': newPassword,
+            }),
+          )
+          .timeout(const Duration(seconds: 30));
+
+      debugPrint('📥 ChangePassword response: ${res.statusCode}');
+
+      if (res.statusCode != 200 && res.statusCode != 201) {
+        String errorMessage = 'Failed to change password';
+        try {
+          final errorBody = jsonDecode(res.body);
+          errorMessage = errorBody['message'] ?? errorBody['Message'] ?? errorMessage;
+        } catch (_) {}
+        throw Exception(errorMessage);
+      }
+    } on TimeoutException {
+      throw Exception('Request timed out');
+    } catch (e) {
+      debugPrint('❌ ChangePassword error: $e');
+      rethrow;
+    }
+  }
+
   /// ─── PROFILE: GET /Profile/me ───────────────────────────────────
   Future<CreateProfileModel?> getProfile() async {
     final uri = Uri.parse('$_baseUrl/Profile/me');
