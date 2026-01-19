@@ -72,7 +72,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                const Text(
+                  const Text(
                   "Forgot Password",
                   style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                 ),

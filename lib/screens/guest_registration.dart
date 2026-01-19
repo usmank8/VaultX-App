@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:vaultx_solution/loading/loading.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:vaultx_solution/models/guest_model.dart';
 import 'package:vaultx_solution/models/residence_model.dart';
-import 'package:vaultx_solution/screens/guest_registration_confirmed.dart';
 import 'package:vaultx_solution/screens/guest_vehicle_registration.dart';
 import 'package:vaultx_solution/services/api_service.dart';
 import 'package:vaultx_solution/widgets/custom_app_bar.dart';
@@ -20,6 +19,7 @@ class _GuestRegistrationFormState extends State<GuestRegistrationForm> {
   final TextEditingController nameController = TextEditingController();
   final TextEditingController contactController = TextEditingController();
   final TextEditingController dateTimeController = TextEditingController();
+  final TextEditingController checkoutController = TextEditingController();
   
   String _selectedGender = 'Male';
   bool _hasVehicle = false;
@@ -31,6 +31,7 @@ class _GuestRegistrationFormState extends State<GuestRegistrationForm> {
   final List<String> _genderOptions = ['Male', 'Female', 'Other'];
   
   DateTime _selectedDateTime = DateTime.now().add(Duration(hours: 1));
+  DateTime _selectedCheckoutTime = DateTime.now().add(Duration(hours: 1)).add(Duration(days: 1));
   
   // Vehicle information
   GuestVehicleModel? _guestVehicle;
@@ -44,6 +45,7 @@ class _GuestRegistrationFormState extends State<GuestRegistrationForm> {
     super.initState();
     // Initialize the date time controller with formatted current date and time
     dateTimeController.text = DateFormat('MMM dd, yyyy - hh:mm a').format(_selectedDateTime);
+    checkoutController.text = DateFormat('MMM dd, yyyy - hh:mm a').format(_selectedCheckoutTime);
     _fetchResidences();
   }
 
@@ -52,23 +54,35 @@ class _GuestRegistrationFormState extends State<GuestRegistrationForm> {
     nameController.dispose();
     contactController.dispose();
     dateTimeController.dispose();
+    checkoutController.dispose();
     super.dispose();
   }
 
   Future<void> _fetchResidences() async {
     try {
       final residences = await _apiService.getResidences();
-      final primaryResidence = residences.firstWhere(
-        (r) => r.isPrimary,
-        orElse: () => residences.isNotEmpty ? residences.first : throw Exception('No residences found'),
-      );
+      
+      // First check for currently selected residence from shared preferences
+      final prefs = await SharedPreferences.getInstance();
+      final selectedResidenceId = prefs.getString('selected_residence_id');
+      
+      ResidenceModel selectedResidence;
+      if (selectedResidenceId != null) {
+        selectedResidence = residences.firstWhere(
+          (r) => r.id == selectedResidenceId,
+          orElse: () => residences.firstWhere((r) => r.isPrimary),
+        );
+      } else {
+        selectedResidence = residences.firstWhere((r) => r.isPrimary);
+      }
+      
       setState(() {
         _residences = residences;
-        _selectedResidenceId = primaryResidence.id;
+        _selectedResidenceId = selectedResidence.id;
       });
     } catch (e) {
       setState(() {
-        _errorMessage = 'Failed to load primary residence: $e';
+        _errorMessage = 'Failed to load residence: $e';
       });
     }
   }
@@ -97,6 +111,35 @@ class _GuestRegistrationFormState extends State<GuestRegistrationForm> {
             pickedTime.minute,
           );
           dateTimeController.text = DateFormat('MMM dd, yyyy - hh:mm a').format(_selectedDateTime);
+        });
+      }
+    }
+  }
+
+  Future<void> _selectCheckoutTime() async {
+    final DateTime? pickedDate = await showDatePicker(
+      context: context,
+      initialDate: _selectedCheckoutTime,
+      firstDate: _selectedDateTime,
+      lastDate: DateTime.now().add(Duration(days: 30)),
+    );
+    
+    if (pickedDate != null) {
+      final TimeOfDay? pickedTime = await showTimePicker(
+        context: context,
+        initialTime: TimeOfDay.fromDateTime(_selectedCheckoutTime),
+      );
+      
+      if (pickedTime != null) {
+        setState(() {
+          _selectedCheckoutTime = DateTime(
+            pickedDate.year,
+            pickedDate.month,
+            pickedDate.day,
+            pickedTime.hour,
+            pickedTime.minute,
+          );
+          checkoutController.text = DateFormat('MMM dd, yyyy - hh:mm a').format(_selectedCheckoutTime);
         });
       }
     }
@@ -138,6 +181,7 @@ class _GuestRegistrationFormState extends State<GuestRegistrationForm> {
         guestName: nameController.text.trim(),
         guestPhoneNumber: contactController.text.trim(),
         eta: _selectedDateTime.toIso8601String(),
+        checkoutTime: _selectedCheckoutTime.toIso8601String(),
         visitCompleted: false,
         vehicle: _hasVehicle ? _guestVehicle : null,
         residenceId: _selectedResidenceId,
@@ -145,16 +189,16 @@ class _GuestRegistrationFormState extends State<GuestRegistrationForm> {
       );
 
       // Register guest and get QR code
-      final String qrCodeImage = await _apiService.registerGuest(guestModel);
+      await _apiService.registerGuest(guestModel);
       
       if (mounted) {
-        // Navigate to confirmation page with QR code
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => GuestConfirmationPage(qrCodeImage: qrCodeImage),
-          ),
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Guest registered successfully!')),
         );
+        
+        // Navigate back to home screen and indicate data should be refreshed
+        Navigator.pop(context, true);
       }
     } catch (e) {
       setState(() {
@@ -254,6 +298,46 @@ class _GuestRegistrationFormState extends State<GuestRegistrationForm> {
                       child: IgnorePointer(
                         child: TextField(
                           controller: dateTimeController,
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: const Color(0xFFFEECEC),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide.none,
+                            ),
+                            contentPadding:
+                                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                            suffixIcon: Icon(Icons.calendar_today, color: Color(0xFFE57373)),
+                          ),
+                          style: const TextStyle(
+                            fontSize: 16,
+                            color: Color(0xFFE57373),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                
+                // Checkout time picker
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Checkout date and time',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF4A4A4A),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    InkWell(
+                      onTap: _selectCheckoutTime,
+                      child: IgnorePointer(
+                        child: TextField(
+                          controller: checkoutController,
                           decoration: InputDecoration(
                             filled: true,
                             fillColor: const Color(0xFFFEECEC),

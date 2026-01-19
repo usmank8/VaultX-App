@@ -30,9 +30,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
   bool _isLoading = true;
   String? _errorMessage;
-  List<VehicleModel> _allVehicles = []; // All vehicles across residences
   List<VehicleModel> _residenceVehicles = []; // Vehicles for selected residence
-  List<GuestModel> _allGuests = []; // All guests across residences
   List<GuestModel> _residenceGuests = []; // Guests for selected residence
   String? _selectedResidenceId;
   ResidenceModel? _selectedResidence;
@@ -59,17 +57,30 @@ class _DashboardPageState extends State<DashboardPage> {
     });
 
     try {
-      // Load all vehicles and guests
-      final vehicles = await _apiService.getVehicles();
-      final guests = await _apiService.getGuests();
+      // Load vehicles - use residence-specific endpoint if residence is selected
+      List<VehicleModel> vehicles;
+      if (_selectedResidenceId != null && _selectedResidenceId!.isNotEmpty) {
+        vehicles = await _apiService.getVehiclesByResidence(_selectedResidenceId!);
+        debugPrint('Loaded vehicles for residence $_selectedResidenceId: ${vehicles.length}');
+      } else {
+        vehicles = await _apiService.getVehicles();
+        debugPrint('Loaded all vehicles: ${vehicles.length}');
+      }
+      
+      // Load guests - use residence-specific endpoint if residence is selected
+      List<GuestModel> guests;
+      if (_selectedResidenceId != null && _selectedResidenceId!.isNotEmpty) {
+        guests = await _apiService.getGuestsByResidence(_selectedResidenceId!);
+        debugPrint('Loaded guests for residence $_selectedResidenceId: ${guests.length}');
+      } else {
+        guests = await _apiService.getGuests();
+        debugPrint('Loaded all guests: ${guests.length}');
+      }
 
       if (mounted) {
         setState(() {
-          _allVehicles = vehicles;
-          _allGuests = guests;
-          
-          // Filter by selected residence
-          _filterByResidence();
+          _residenceVehicles = vehicles;
+          _residenceGuests = guests;
           
           _isLoading = false;
         });
@@ -98,44 +109,20 @@ class _DashboardPageState extends State<DashboardPage> {
     }
   }
 
-  void _filterByResidence() {
-    if (_selectedResidenceId != null && _selectedResidenceId!.isNotEmpty) {
-      // Filter vehicles by residence ID
-      _residenceVehicles = _allVehicles.where((v) {
-        final vehicleResidenceId = v.residenceId?.toString().toLowerCase();
-        final selectedId = _selectedResidenceId?.toLowerCase();
-        return vehicleResidenceId == selectedId;
-      }).toList();
-      
-      // Filter guests by residence ID
-      _residenceGuests = _allGuests.where((g) {
-        final guestResidenceId = g.residenceId?.toString().toLowerCase();
-        final selectedId = _selectedResidenceId?.toLowerCase();
-        return guestResidenceId == selectedId;
-      }).toList();
-      
-      debugPrint('Selected Residence ID: $_selectedResidenceId');
-      debugPrint('Total vehicles: ${_allVehicles.length}, Filtered: ${_residenceVehicles.length}');
-      debugPrint('Total guests: ${_allGuests.length}, Filtered: ${_residenceGuests.length}');
-    } else {
-      // No residence selected, show all
-      _residenceVehicles = _allVehicles;
-      _residenceGuests = _allGuests;
-    }
-  }
-
   void _onResidenceChanged(dynamic residence) {
     debugPrint('Residence changed: ${residence.id}');
     setState(() {
       _selectedResidenceId = residence.id;
       _selectedResidence = residence;
-      _filterByResidence();
     });
     
     // Also save to SharedPreferences
     SharedPreferences.getInstance().then((prefs) {
       prefs.setString('selected_residence_id', residence.id);
     });
+
+    // Reload data for the new residence
+    _loadData();
   }
 
   @override
@@ -681,9 +668,28 @@ class _DashboardPageState extends State<DashboardPage> {
                 guest.guestName,
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
-              subtitle: Text(
-                guest.guestPhoneNumber,
-                style: TextStyle(color: Colors.grey.shade600),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    guest.guestPhoneNumber,
+                    style: TextStyle(color: Colors.grey.shade600),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'ETA: ${guest.eta != null ? DateFormat('MMM dd, hh:mm a').format(guest.eta!) : 'N/A'}',
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                  ),
+                  Text(
+                    'Checkout: ${guest.checkoutTime != null ? DateFormat('MMM dd, hh:mm a').format(guest.checkoutTime!) : 'N/A'}',
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                  ),
+                  if (guest.actualArrivalTime != null)
+                    Text(
+                      'Arrived: ${DateFormat('MMM dd, hh:mm a').format(guest.actualArrivalTime!)}',
+                      style: TextStyle(color: Colors.green.shade600, fontSize: 12),
+                    ),
+                ],
               ),
               trailing: _buildGuestStatusChip(guest),
             ),
