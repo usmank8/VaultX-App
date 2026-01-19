@@ -9,10 +9,12 @@ import 'package:vaultx_solution/widgets/custom_app_bar.dart';
 
 class GuestConfirmationPage extends StatefulWidget {
   final String qrCodeImage;
-  
+  final bool showQRInitially;
+
   const GuestConfirmationPage({
-    Key? key, 
+    Key? key,
     required this.qrCodeImage,
+    this.showQRInitially = false,
   }) : super(key: key);
 
   @override
@@ -23,6 +25,15 @@ class _GuestConfirmationPageState extends State<GuestConfirmationPage> {
   bool _showQR = false;
   bool _isLoading = false;
   File? _qrImageFile;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.showQRInitially) {
+      _showQR = true;
+      _prepareQrImage();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -42,14 +53,14 @@ class _GuestConfirmationPageState extends State<GuestConfirmationPage> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 // Heading
-                const Text(
-                  'Guest Added!',
-                  style: TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF7D2828), // Maroon/burgundy color
-                  ),
-                ),
+                // const Text(
+                //   'Guest Added!',
+                //   style: TextStyle(
+                //     fontSize: 32,
+                //     fontWeight: FontWeight.bold,
+                //     color: Color(0xFF7D2828), // Maroon/burgundy color
+                //   ),
+                // ),
                 const SizedBox(height: 40),
                 
                 // Checkmark image
@@ -65,39 +76,39 @@ class _GuestConfirmationPageState extends State<GuestConfirmationPage> {
                     );
                   },
                 ),
-                const SizedBox(height: 40),
+                // const SizedBox(height: 40),
                 
                 // Generate QR Code Button
-                ElevatedButton(
-                  onPressed: _isLoading ? null : () {
-                    setState(() {
-                      _showQR = true;
-                      _prepareQrImage();
-                    });
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFD5A3A3), // Pink/rose color
-                    foregroundColor: Colors.black,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(25),
-                    ),
-                    minimumSize: const Size(200, 45),
-                  ),
-                  child: _isLoading
-                      ? SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: UnderReviewScreen()
-                        )
-                      : const Text(
-                          'Generate QR Code',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                ),
+                // ElevatedButton(
+                //   onPressed: _isLoading ? null : () {
+                //     setState(() {
+                //       _showQR = true;
+                //       _prepareQrImage();
+                //     });
+                //   },
+                //   style: ElevatedButton.styleFrom(
+                //     backgroundColor: const Color(0xFFD5A3A3), // Pink/rose color
+                //     foregroundColor: Colors.black,
+                //     elevation: 0,
+                //     shape: RoundedRectangleBorder(
+                //       borderRadius: BorderRadius.circular(25),
+                //     ),
+                //     minimumSize: const Size(200, 45),
+                //   ),
+                //   child: _isLoading
+                //       ? SizedBox(
+                //           width: 20,
+                //           height: 20,
+                //           child: UnderReviewScreen()
+                //         )
+                //       : const Text(
+                //           'Generate QR Code',
+                //           style: TextStyle(
+                //             fontSize: 16,
+                //             fontWeight: FontWeight.w600,
+                //           ),
+                //         ),
+                // ),
                 const SizedBox(height: 30),
                 
                 // QR Code
@@ -147,6 +158,28 @@ class _GuestConfirmationPageState extends State<GuestConfirmationPage> {
                     icon: Icon(Icons.share),
                     label: const Text(
                       'Share QR Code',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  
+                  // Done Button
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF7D2828),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(25),
+                      ),
+                      minimumSize: const Size(160, 45),
+                    ),
+                    child: const Text(
+                      'Done',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,

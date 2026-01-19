@@ -119,15 +119,21 @@ class AddGuestModel {
   final String guestName;
   final String guestPhoneNumber;
   final String eta;
+  final String? checkoutTime;
   final bool? visitCompleted;
   final GuestVehicleModel? vehicle;
+  final String? residenceId;
+  final String? gender;
 
   AddGuestModel({
     required this.guestName,
     required this.guestPhoneNumber,
     required this.eta,
+    this.checkoutTime,
     this.visitCompleted,
     this.vehicle,
+    this.residenceId,
+    this.gender,
   });
 
   Map<String, dynamic> toJson() {
@@ -137,12 +143,32 @@ class AddGuestModel {
       'eta': eta,
     };
 
+    if (checkoutTime != null) {
+      data['checkoutTime'] = checkoutTime;
+    }
+
     if (visitCompleted != null) {
       data['visitCompleted'] = visitCompleted;
     }
 
+    // Flatten vehicle properties to top level as expected by backend
     if (vehicle != null) {
-      data['vehicle'] = vehicle!.toJson();
+      data['vehicleName'] = vehicle!.vehicleName;
+      data['vehicleModel'] = vehicle!.vehicleModel;
+      data['vehicleLicensePlateNumber'] = vehicle!.vehicleLicensePlateNumber;
+      data['vehicleType'] = vehicle!.vehicleType;
+      data['vehicleColor'] = vehicle!.vehicleColor;
+      if (vehicle!.vehicleRFIDTagId != null) {
+        data['vehicleRFIDTagId'] = vehicle!.vehicleRFIDTagId;
+      }
+    }
+
+    if (residenceId != null) {
+      data['residenceId'] = residenceId;
+    }
+
+    if (gender != null) {
+      data['gender'] = gender;
     }
 
     return data;

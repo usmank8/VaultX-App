@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:vaultx_solution/loading/loading.dart';
 import 'package:vaultx_solution/models/vehicle_model.dart';
+import 'package:vaultx_solution/models/residence_model.dart';
 import 'package:vaultx_solution/services/api_service.dart';
 import 'package:vaultx_solution/widgets/custom_app_bar.dart';
 
@@ -19,12 +20,35 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
   final _rfidTagController = TextEditingController();
   final _vehicleColorController = TextEditingController();
   String _vehicleType = 'Sedan'; // Default value
+  String? _selectedResidenceId;
   
   final ApiService _apiService = ApiService();
   bool _isLoading = false;
   String? _errorMessage;
+  List<ResidenceModel> _residences = [];
   
   final List<String> _vehicleTypes = ['Sedan', 'SUV', 'Hatchback', 'Truck', 'Motorcycle', 'Other'];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadResidences();
+  }
+
+  Future<void> _loadResidences() async {
+    try {
+      final residences = await _apiService.getResidences();
+      setState(() {
+        _residences = residences;
+        // Default to first residence if available
+        if (_residences.isNotEmpty) {
+          _selectedResidenceId = _residences.first.id;
+        }
+      });
+    } catch (e) {
+      debugPrint('Error loading residences: $e');
+    }
+  }
 
   @override
   void dispose() {
@@ -52,6 +76,7 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
         vehicleType: _vehicleType,
         vehicleRfidTagId: _rfidTagController.text.trim(),
         vehicleColor: _vehicleColorController.text.trim(),
+        residenceId: _selectedResidenceId,
       );
 
       await _apiService.addVehicle(vehicleModel);
@@ -135,6 +160,10 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
                   if (value == null || value.isEmpty) {
                     return 'Please enter vehicle model';
                   }
+                  final year = int.tryParse(value);
+                  if (year == null || year < 1900 || year > 2026) {
+                    return 'Please enter a valid model year (1900-2026)';
+                  }
                   return null;
                 },
               ),
@@ -146,6 +175,10 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
                 validator: (value) {
                   if (value == null || value.isEmpty) {
                     return 'Please enter license plate number';
+                  }
+                  final regex = RegExp(r'^[A-Z]{2,}-[0-9]{1,5}$', caseSensitive: false);
+                  if (!regex.hasMatch(value)) {
+                    return 'Invalid license plate format. Use format like LIT-123';
                   }
                   return null;
                 },
@@ -164,17 +197,20 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
                 },
               ),
               
-              _buildInputField(
-                controller: _rfidTagController,
-                label: "RFID Tag ID",
-                hint: "Enter RFID tag ID",
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter RFID tag ID';
-                  }
-                  return null;
-                },
-              ),
+              if (_residences.isNotEmpty)
+                _buildResidenceDropdown(),
+              
+              // _buildInputField(
+              //   controller: _rfidTagController,
+              //   label: "RFID Tag ID",
+              //   hint: "Enter RFID tag ID",
+              //   validator: (value) {
+              //     if (value == null || value.isEmpty) {
+              //       return 'Please enter RFID tag ID';
+              //     }
+              //     return null;
+              //   },
+              // ),
               
               _buildInputField(
                 controller: _vehicleColorController,
@@ -290,6 +326,51 @@ class _VehicleRegistrationPageState extends State<VehicleRegistrationPage> {
                 );
               }).toList(),
               onChanged: onChanged,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildResidenceDropdown() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("Residence", style: TextStyle(fontWeight: FontWeight.bold)),
+          SizedBox(height: 8),
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFF1ED),
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: DropdownButtonFormField<String>(
+              value: _selectedResidenceId,
+              decoration: InputDecoration(
+                border: InputBorder.none,
+              ),
+              items: _residences.map((residence) {
+                return DropdownMenuItem<String>(
+                  value: residence.id,
+                  child: Text(residence.displayName),
+                );
+              }).toList(),
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() {
+                    _selectedResidenceId = value;
+                  });
+                }
+              },
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Please select a residence';
+                }
+                return null;
+              },
             ),
           ),
         ],

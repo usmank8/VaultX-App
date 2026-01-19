@@ -3,15 +3,19 @@ import 'package:intl/intl.dart';
 import 'package:vaultx_solution/auth/screens/loginscreen.dart';
 import 'package:vaultx_solution/loading/loading.dart';
 import 'package:vaultx_solution/screens/guest_registration.dart';
+import 'package:vaultx_solution/screens/guest_registration_confirmed.dart';
 import 'package:vaultx_solution/screens/vehicle_registration.dart';
+import 'package:vaultx_solution/screens/residence_registration.dart';
 import 'package:vaultx_solution/screens/otp_screen.dart';
 import 'package:vaultx_solution/screens/all_guests_screen.dart';
 import 'package:vaultx_solution/screens/all_vehicles_screen.dart';
 import 'package:vaultx_solution/models/vehicle_model.dart';
 import 'package:vaultx_solution/models/guest_model.dart';
 import 'package:vaultx_solution/models/residence_model.dart';
+import 'package:vaultx_solution/models/create_profile_model.dart';
 import 'package:vaultx_solution/services/api_service.dart';
 import 'package:vaultx_solution/widgets/residence_selector_widget.dart';
+import 'package:vaultx_solution/widgets/custom_app_bar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class DashboardPage extends StatefulWidget {
@@ -26,12 +30,11 @@ class _DashboardPageState extends State<DashboardPage> {
 
   bool _isLoading = true;
   String? _errorMessage;
-  List<VehicleModel> _allVehicles = []; // All vehicles across residences
   List<VehicleModel> _residenceVehicles = []; // Vehicles for selected residence
-  List<GuestModel> _allGuests = []; // All guests across residences
   List<GuestModel> _residenceGuests = []; // Guests for selected residence
   String? _selectedResidenceId;
   ResidenceModel? _selectedResidence;
+  CreateProfileModel? _profile;
 
   @override
   void initState() {
@@ -44,6 +47,7 @@ class _DashboardPageState extends State<DashboardPage> {
     final prefs = await SharedPreferences.getInstance();
     _selectedResidenceId = prefs.getString('selected_residence_id');
     await _loadData();
+    await _loadProfile();
   }
 
   Future<void> _loadData() async {
@@ -53,17 +57,30 @@ class _DashboardPageState extends State<DashboardPage> {
     });
 
     try {
-      // Load all vehicles and guests
-      final vehicles = await _apiService.getVehicles();
-      final guests = await _apiService.getGuests();
+      // Load vehicles - use residence-specific endpoint if residence is selected
+      List<VehicleModel> vehicles;
+      if (_selectedResidenceId != null && _selectedResidenceId!.isNotEmpty) {
+        vehicles = await _apiService.getVehiclesByResidence(_selectedResidenceId!);
+        debugPrint('Loaded vehicles for residence $_selectedResidenceId: ${vehicles.length}');
+      } else {
+        vehicles = await _apiService.getVehicles();
+        debugPrint('Loaded all vehicles: ${vehicles.length}');
+      }
+      
+      // Load guests - use residence-specific endpoint if residence is selected
+      List<GuestModel> guests;
+      if (_selectedResidenceId != null && _selectedResidenceId!.isNotEmpty) {
+        guests = await _apiService.getGuestsByResidence(_selectedResidenceId!);
+        debugPrint('Loaded guests for residence $_selectedResidenceId: ${guests.length}');
+      } else {
+        guests = await _apiService.getGuests();
+        debugPrint('Loaded all guests: ${guests.length}');
+      }
 
       if (mounted) {
         setState(() {
-          _allVehicles = vehicles;
-          _allGuests = guests;
-          
-          // Filter by selected residence
-          _filterByResidence();
+          _residenceVehicles = vehicles;
+          _residenceGuests = guests;
           
           _isLoading = false;
         });
@@ -79,29 +96,16 @@ class _DashboardPageState extends State<DashboardPage> {
     }
   }
 
-  void _filterByResidence() {
-    if (_selectedResidenceId != null && _selectedResidenceId!.isNotEmpty) {
-      // Filter vehicles by residence ID
-      _residenceVehicles = _allVehicles.where((v) {
-        final vehicleResidenceId = v.residenceId?.toString().toLowerCase();
-        final selectedId = _selectedResidenceId?.toLowerCase();
-        return vehicleResidenceId == selectedId;
-      }).toList();
-      
-      // Filter guests by residence ID
-      _residenceGuests = _allGuests.where((g) {
-        final guestResidenceId = g.residenceId?.toString().toLowerCase();
-        final selectedId = _selectedResidenceId?.toLowerCase();
-        return guestResidenceId == selectedId;
-      }).toList();
-      
-      debugPrint('Selected Residence ID: $_selectedResidenceId');
-      debugPrint('Total vehicles: ${_allVehicles.length}, Filtered: ${_residenceVehicles.length}');
-      debugPrint('Total guests: ${_allGuests.length}, Filtered: ${_residenceGuests.length}');
-    } else {
-      // No residence selected, show all
-      _residenceVehicles = _allVehicles;
-      _residenceGuests = _allGuests;
+  Future<void> _loadProfile() async {
+    try {
+      final profile = await _apiService.getProfile();
+      if (mounted) {
+        setState(() {
+          _profile = profile;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading profile: $e');
     }
   }
 
@@ -110,181 +114,201 @@ class _DashboardPageState extends State<DashboardPage> {
     setState(() {
       _selectedResidenceId = residence.id;
       _selectedResidence = residence;
-      _filterByResidence();
     });
     
     // Also save to SharedPreferences
     SharedPreferences.getInstance().then((prefs) {
       prefs.setString('selected_residence_id', residence.id);
     });
+
+    // Reload data for the new residence
+    _loadData();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: PreferredSize(
+        preferredSize: Size.fromHeight(70),
+        child: CustomAppBar(
+          showBackButton: false,
+          actions: [
+            IconButton(
+              icon: Icon(Icons.add_home, color: Colors.black),
+              onPressed: () async {
+                final result = await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ResidenceRegistrationPage()),
+                );
+                if (result == true) {
+                  _loadData(); // Refresh data after adding residence
+                }
+              },
+              tooltip: 'Add Secondary Residence',
+            ),
+          ],
+          userProfile: _profile,
+          onRefresh: _loadData,
+          unreadNotifications: 0,
+        ),
+      ),
       backgroundColor: const Color(0xFFF5F5F5),
       body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: _loadData,
-          child: CustomScrollView(
-            slivers: [
-              // App Bar
-              SliverAppBar(
-                floating: true,
-                backgroundColor: const Color(0xFF2D0A0A),
-                title: const Text(
-                  'VaultX',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                actions: [
-                  IconButton(
-                    icon: const Icon(Icons.notifications_outlined, color: Colors.white),
-                    onPressed: () {
-                      // Navigate to notifications
-                    },
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.logout, color: Colors.white),
-                    onPressed: () async {
-                      final prefs = await SharedPreferences.getInstance();
-                      await prefs.clear();
-                      if (mounted) {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(builder: (_) => const LoginPage()),
-                        );
-                      }
-                    },
-                  ),
-                ],
-              ),
-
-              // Content
-              SliverToBoxAdapter(
+        child: _selectedResidence?.isApproved == false
+            ? Padding(
+                padding: const EdgeInsets.all(16),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Residence Selector
                     ResidenceSelectorWidget(
                       onResidenceChanged: _onResidenceChanged,
                     ),
-
                     const SizedBox(height: 16),
-
-                    // Quick Actions
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Quick Actions',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
+                    Card(
+                      color: Colors.orange.shade50,
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          children: [
+                            Icon(Icons.hourglass_empty, size: 48, color: Colors.orange),
+                            const SizedBox(height: 16),
+                            const Text(
+                              'Residence Pending Approval',
+                              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                             ),
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _QuickActionCard(
-                                  icon: Icons.person_add,
-                                  label: 'Add Guest',
-                                  color: Colors.blue,
-                                  onTap: () async {
-                                    final result = await Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => const GuestRegistrationForm(),
-                                      ),
-                                    );
-                                    if (result == true) {
-                                      _loadData();
-                                    }
-                                  },
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: _QuickActionCard(
-                                  icon: Icons.directions_car,
-                                  label: 'Add Vehicle',
-                                  color: Colors.green,
-                                  onTap: () async {
-                                    // Check vehicle count for THIS residence
-                                    if (_residenceVehicles.length >= 4) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(
-                                          content: Text('Maximum 4 vehicles allowed per residence'),
-                                          backgroundColor: Colors.red,
-                                        ),
-                                      );
-                                      return;
-                                    }
-                                    final result = await Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => const VehicleRegistrationPage(),
-                                      ),
-                                    );
-                                    if (result == true) {
-                                      _loadData();
-                                    }
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Your residence is waiting for admin approval. You cannot register guests or vehicles until it is approved.',
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-
-                    const SizedBox(height: 24),
-
-                    // Vehicles Section - USE _residenceVehicles
-                    _buildSectionHeader(
-                      title: 'My Vehicles',
-                      count: _residenceVehicles.length, // ✅ Use filtered count
-                      maxCount: 4,
-                      onViewAll: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => AllVehiclesScreen(vehicles: _residenceVehicles), // ✅ Pass filtered list
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                    _buildVehiclesSection(),
-
-                    const SizedBox(height: 24),
-
-                    // Guests Section - USE _residenceGuests
-                    _buildSectionHeader(
-                      title: 'Recent Guests',
-                      count: _residenceGuests.length, // ✅ Use filtered count
-                      onViewAll: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => AllGuestsScreen(guests: _residenceGuests), // ✅ Pass filtered list
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                    _buildGuestsSection(),
-
-                    const SizedBox(height: 24),
                   ],
                 ),
-              ),
-            ],
+              )
+            : RefreshIndicator(
+                onRefresh: _loadData,
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Residence Selector
+                      ResidenceSelectorWidget(
+                        onResidenceChanged: _onResidenceChanged,
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // Quick Actions
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Quick Actions',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _QuickActionCard(
+                                    icon: Icons.person_add,
+                                    label: 'Add Guest',
+                                    color: Colors.blue,
+                                    onTap: () async {
+                                      final result = await Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => const GuestRegistrationForm(),
+                                        ),
+                                      );
+                                      if (result == true) {
+                                        _loadData();
+                                      }
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: _QuickActionCard(
+                                    icon: Icons.directions_car,
+                                    label: 'Add Vehicle',
+                                    color: Colors.green,
+                                    onTap: () async {
+                                      // Check vehicle count for THIS residence
+                                      if (_residenceVehicles.length >= 4) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(
+                                            content: Text('Maximum 4 vehicles allowed per residence'),
+                                            backgroundColor: Colors.red,
+                                          ),
+                                        );
+                                        return;
+                                      }
+                                      final result = await Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => const VehicleRegistrationPage(),
+                                        ),
+                                      );
+                                      if (result == true) {
+                                        _loadData();
+                                      }
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 24),
+
+                      // Vehicles Section - USE _residenceVehicles
+                _buildSectionHeader(
+                  title: 'My Vehicles',
+                  count: _residenceVehicles.length, // ✅ Use filtered count
+                  maxCount: 4,
+                  onViewAll: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => AllVehiclesScreen(vehicles: _residenceVehicles), // ✅ Pass filtered list
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 8),
+                _buildVehiclesSection(),
+
+                const SizedBox(height: 24),
+
+                // Guests Section - USE _residenceGuests
+                _buildSectionHeader(
+                  title: 'Recent Guests',
+                  count: _residenceGuests.length, // ✅ Use filtered count
+                  onViewAll: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => AllGuestsScreen(guests: _residenceGuests), // ✅ Pass filtered list
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 8),
+                _buildGuestsSection(),
+
+                const SizedBox(height: 24),
+              ],
+            ),
           ),
         ),
       ),
@@ -620,6 +644,17 @@ class _DashboardPageState extends State<DashboardPage> {
           return Card(
             margin: const EdgeInsets.only(bottom: 8),
             child: ListTile(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => GuestConfirmationPage(
+                      qrCodeImage: guest.qrCode ?? '',
+                      showQRInitially: true,
+                    ),
+                  ),
+                );
+              },
               leading: CircleAvatar(
                 backgroundColor: const Color(0xFF2D0A0A),
                 child: Text(
@@ -633,9 +668,28 @@ class _DashboardPageState extends State<DashboardPage> {
                 guest.guestName,
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
-              subtitle: Text(
-                guest.guestPhoneNumber,
-                style: TextStyle(color: Colors.grey.shade600),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    guest.guestPhoneNumber,
+                    style: TextStyle(color: Colors.grey.shade600),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'ETA: ${guest.eta != null ? DateFormat('MMM dd, hh:mm a').format(guest.eta!) : 'N/A'}',
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                  ),
+                  Text(
+                    'Checkout: ${guest.checkoutTime != null ? DateFormat('MMM dd, hh:mm a').format(guest.checkoutTime!) : 'N/A'}',
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                  ),
+                  if (guest.actualArrivalTime != null)
+                    Text(
+                      'Arrived: ${DateFormat('MMM dd, hh:mm a').format(guest.actualArrivalTime!)}',
+                      style: TextStyle(color: Colors.green.shade600, fontSize: 12),
+                    ),
+                ],
               ),
               trailing: _buildGuestStatusChip(guest),
             ),

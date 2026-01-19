@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
 import '../services/api_service.dart';
+import 'change_password_screen.dart';
 
 class OtpScreen extends StatefulWidget {
   final String email;
-  const OtpScreen({Key? key, required this.email}) : super(key: key);
+  final bool isForgotPassword;
+  const OtpScreen({Key? key, required this.email, this.isForgotPassword = false}) : super(key: key);
 
   @override
   State<OtpScreen> createState() => _OtpScreenState();
@@ -93,8 +95,18 @@ class _OtpScreenState extends State<OtpScreen> {
             content: Text('OTP verified successfully'),
             backgroundColor: Color(0xFF7D2828)),
       );
-      // Redirect to login page after successful verification
-      Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+      if (widget.isForgotPassword) {
+        // Navigate to change password screen
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ChangePasswordScreen(email: widget.email),
+          ),
+        );
+      } else {
+        // Redirect to login page after successful verification
+        Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+      }
       return;
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(

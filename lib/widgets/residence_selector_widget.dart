@@ -60,6 +60,7 @@ class _ResidenceSelectorWidgetState extends State<ResidenceSelectorWidget> {
   }
 
   Future<void> _selectResidence(ResidenceModel residence) async {
+    debugPrint('Selecting residence: ${residence.id}, isApproved: ${residence.isApproved}');
     setState(() => _selectedResidence = residence);
     
     // Save to SharedPreferences
@@ -152,7 +153,7 @@ class _ResidenceSelectorWidgetState extends State<ResidenceSelectorWidget> {
                           ),
                         if (_selectedResidence!.isPrimary) const SizedBox(width: 6),
                         Text(
-                          '${_selectedResidence!.guestCount ?? 0} Guests · ${_selectedResidence!.vehicleCount ?? 0} Vehicles',
+                          '${_selectedResidence?.guestCount ?? 0} Guests - ${_selectedResidence?.vehicleCount ?? 0} Vehicles',
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.grey.shade600,
@@ -216,11 +217,17 @@ class _ResidenceSelectorWidgetState extends State<ResidenceSelectorWidget> {
                   Icons.home,
                   color: isSelected ? const Color(0xFF2D0A0A) : Colors.grey,
                 ),
-                title: Text(
-                  residence.displayName,
-                  style: TextStyle(
-                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                  ),
+                title: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        residence.displayName,
+                        style: TextStyle(
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 subtitle: Text(
                   residence.isPrimary ? 'Primary Residence' : residence.address,

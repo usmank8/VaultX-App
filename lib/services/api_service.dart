@@ -263,6 +263,44 @@ class ApiService {
     await sendOtp(email);
   }
 
+  /// ─── PASSWORD: CHANGE ───────────────────────────────────────────
+  Future<void> changePassword(String email, String newPassword) async {
+    final uri = Uri.parse('$_baseUrl/Auth/change-password');
+    debugPrint('📤 ChangePassword request to: $uri');
+
+    try {
+      final res = await _publicClient
+          .post(
+            uri,
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: jsonEncode({
+              'email': email,
+              'newPassword': newPassword,
+            }),
+          )
+          .timeout(const Duration(seconds: 30));
+
+      debugPrint('📥 ChangePassword response: ${res.statusCode}');
+
+      if (res.statusCode != 200 && res.statusCode != 201) {
+        String errorMessage = 'Failed to change password';
+        try {
+          final errorBody = jsonDecode(res.body);
+          errorMessage = errorBody['message'] ?? errorBody['Message'] ?? errorMessage;
+        } catch (_) {}
+        throw Exception(errorMessage);
+      }
+    } on TimeoutException {
+      throw Exception('Request timed out');
+    } catch (e) {
+      debugPrint('❌ ChangePassword error: $e');
+      rethrow;
+    }
+  }
+
   /// ─── PROFILE: GET /Profile/me ───────────────────────────────────
   Future<CreateProfileModel?> getProfile() async {
     final uri = Uri.parse('$_baseUrl/Profile/me');
@@ -332,7 +370,7 @@ class ApiService {
 
     try {
       final res = await _client
-          .put(
+          .patch(
             uri,
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode(dto.toJson()),
@@ -348,12 +386,12 @@ class ApiService {
     }
   }
 
-  /// ─── PROFILE: PUT /Profile/password ─────────────────────────────
+  /// ─── PROFILE: PUT /Profile/password/update ─────────────────────────────
   Future<void> updatePassword(UpdatePasswordModel dto) async {
-    final uri = Uri.parse('$_baseUrl/Profile/password');
+    final uri = Uri.parse('$_baseUrl/Profile/password/update');
     
     final res = await _client
-        .put(
+        .post(
           uri,
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode(dto.toJson()),
@@ -410,9 +448,9 @@ class ApiService {
     }
   }
 
-  /// ─── GUEST: POST /Guests ─────────────────────────────────
+  /// ─── GUEST: POST /Guests/register ─────────────────────────────────
   Future<String> registerGuest(AddGuestModel dto) async {
-    final uri = Uri.parse('$_baseUrl/Guests');
+    final uri = Uri.parse('$_baseUrl/Guests/register');
 
     final res = await _client
         .post(
@@ -435,9 +473,9 @@ class ApiService {
     }
   }
 
-  /// ─── GUEST: GET /Guests/user/me ─────────────────────────────────
+  /// ─── GUEST: GET /Guests/my-guests ─────────────────────────────────
   Future<List<GuestModel>> getGuests() async {
-    final uri = Uri.parse('$_baseUrl/Guests/user/me');
+    final uri = Uri.parse('$_baseUrl/Guests/my-guests');
     debugPrint('📤 GetGuests request to: $uri');
 
     try {
@@ -445,7 +483,9 @@ class ApiService {
       debugPrint('📥 GetGuests response: ${res.statusCode}');
 
       if (res.statusCode == 200) {
-        final List<dynamic> guestsJson = jsonDecode(res.body);
+        // API returns a wrapped object with guests array inside
+        final Map<String, dynamic> responseData = jsonDecode(res.body);
+        final List<dynamic> guestsJson = responseData['guests'] as List<dynamic>? ?? [];
         return guestsJson.map((json) => GuestModel.fromJson(json)).toList();
       } else if (res.statusCode == 404) {
         return [];
@@ -530,6 +570,35 @@ class ApiService {
     if (res.statusCode != 200 && res.statusCode != 201) {
       final error = jsonDecode(res.body)['message'] ?? 'Failed to add residence';
       throw Exception(error);
+    }
+  }
+
+  /// Add secondary residence
+  Future<void> addSecondaryResidence(AddSecondaryResidenceDto dto) async {
+    final uri = Uri.parse('$_baseUrl/Residences');
+    debugPrint('📤 AddSecondaryResidence request to: $uri');
+    debugPrint('📤 AddSecondaryResidence body: ${jsonEncode(dto.toJson())}');
+    
+    final res = await _client
+        .post(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode(dto.toJson()),
+        )
+        .timeout(const Duration(seconds: 30));
+    
+    debugPrint('📥 AddSecondaryResidence response status: ${res.statusCode}');
+    debugPrint('📥 AddSecondaryResidence response body: ${res.body}');
+    
+    if (res.statusCode != 200 && res.statusCode != 201) {
+      String errorMessage = 'Failed to add secondary residence';
+      try {
+        final errorBody = jsonDecode(res.body);
+        errorMessage = errorBody['message'] ?? errorBody['Message'] ?? 'Failed to add secondary residence (${res.statusCode})';
+      } catch (_) {
+        errorMessage = 'Failed to add secondary residence (${res.statusCode}): ${res.body}';
+      }
+      throw Exception(errorMessage);
     }
   }
 
