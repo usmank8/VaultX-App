@@ -11,6 +11,7 @@ class VehicleModel {
   final String? residenceBlock;
   final DateTime? createdAt;
   final DateTime? updatedAt;
+  final bool? isGuest;
 
   VehicleModel({
     this.vehicleId,
@@ -25,6 +26,7 @@ class VehicleModel {
     this.residenceBlock,
     this.createdAt,
     this.updatedAt,
+    this.isGuest,
   });
 
   factory VehicleModel.fromJson(Map<String, dynamic> json) {
@@ -47,6 +49,7 @@ class VehicleModel {
       updatedAt: json['updatedAt'] != null
           ? DateTime.tryParse(json['updatedAt'] as String)
           : null,
+      isGuest: json['isGuest'] as bool?,
     );
   }
 

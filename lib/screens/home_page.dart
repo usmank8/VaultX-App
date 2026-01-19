@@ -67,6 +67,10 @@ class _DashboardPageState extends State<DashboardPage> {
         debugPrint('Loaded all vehicles: ${vehicles.length}');
       }
       
+      // Filter out guest vehicles
+      vehicles = vehicles.where((v) => v.isGuest != true).toList();
+      debugPrint('Filtered vehicles (excluding guests): ${vehicles.length}');
+      
       // Load guests - use residence-specific endpoint if residence is selected
       List<GuestModel> guests;
       if (_selectedResidenceId != null && _selectedResidenceId!.isNotEmpty) {
